@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Virus Shooter</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div id="main-container">
+        <!-- リソース表示 (HUD) -->
+        <div id="hud-bar">
+            <div class="hud-item">
+                <span class="hud-label">所持金:</span>
+                <span id="stat-money-hud" class="hud-value">0</span>
+            </div>
+            <div class="hud-item">
+                <span class="hud-label">欠片:</span>
+                <span id="stat-fragments-hud" class="hud-value">0</span>
+            </div>
+            <div class="hud-item">
+                <span class="hud-label">抗体P:</span>
+                <span id="antibody-display" class="hud-value">0</span>
+            </div>
+            <div class="hud-item">
+                <span class="hud-label">撃退数:</span>
+                <span id="virus-count-display" class="hud-value">0</span>
+            </div>
+            <button id="reset-button">リセット</button>
+        </div>
+
+        <!-- コンテンツエリア -->
+        <div id="content-area">
+            <!-- ゲームタブ -->
+            <div id="game-tab" class="tab-content active">
+                <div id="game-container">
+                    <canvas id="gameCanvas" width="400" height="600"></canvas>
+                    <button id="open-map-btn">マップ</button>
+                </div>
+            </div>
+
+            <!-- マップ選択タブ -->
+            <div id="map-selection-tab" class="tab-content">
+                <h2>マップ選択</h2>
+                <div class="map-list">
+                    <div class="map-category">
+                        <div class="map-category-header" onclick="toggleMapDetails('map1-details')">
+                            マップ① <span class="arrow">▼</span>
+                        </div>
+                        <div id="map1-details" class="map-details">
+                            <button class="stage-btn" data-stage="map1-1" onclick="startMap('map1-1', 15)">マップ①ー① (ノルマ:
+                                15)</button>
+                            <button class="stage-btn" data-stage="map1-2" onclick="startMap('map1-2', 30)">マップ①ー② (ノルマ:
+                                30)</button>
+                            <button class="stage-btn" data-stage="map1-3" onclick="startMap('map1-3', 50)">マップ①ー③ (ノルマ:
+                                50)</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- プレイヤータブ -->
+            <div id="player-tab" class="tab-content">
+                <h2>ステータス</h2>
+                <div class="player-profile">
+                    <div class="profile-left">
+                        <img src="player.png" alt="Player" id="profile-img">
+                    </div>
+                    <div class="profile-right">
+                        <div class="stat-item">
+                            <span class="stat-label">攻撃力:</span>
+                            <span id="stat-atk">10</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">最大体力:</span>
+                            <span id="stat-hp">50</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">所持金:</span>
+                            <span id="stat-money">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">欠片:</span>
+                            <span id="stat-fragments">0</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- リワードタブ (クリア後) -->
+            <div id="reward-tab" class="tab-content">
+                <div id="reward-screen">
+                    <div id="reward-container">
+                        <h1 id="reward-title">CLEAR!</h1>
+                        <div id="reward-list">
+                            <div class="reward-item" id="reward-virus">
+                                <span class="reward-label">ウイルス:</span>
+                                <span class="reward-value">+0</span>
+                            </div>
+                            <div class="reward-item" id="reward-fragments">
+                                <span class="reward-label">欠片:</span>
+                                <span class="reward-value">+0</span>
+                            </div>
+                            <div class="reward-item" id="reward-money">
+                                <span class="reward-label">お金:</span>
+                                <span class="reward-value">+0</span>
+                            </div>
+                        </div>
+                        <button id="reward-close-btn" class="hidden">次へ</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- アップグレードタブ -->
+            <div id="upgrade-tab" class="tab-content">
+                <h2>霧吹き・施設強化</h2>
+                <div class="upgrade-info">
+                    <p>現在の撃退数: <span class="virus-total-count">0</span></p>
+                    <p>所持抗体ポイント: <span class="antibody-count">0</span></p>
+                </div>
+                <div class="upgrade-list">
+                    <div class="upgrade-item">
+                        <span>攻撃力 (Lv <span id="atk-lv">1</span>)</span>
+                        <button id="upgrade-atk">強化 (コスト: <span id="atk-cost">10</span>)</button>
+                    </div>
+                    <div class="upgrade-item">
+                        <span>攻撃範囲 (Lv <span id="size-lv">1</span>)</span>
+                        <button id="upgrade-size">強化 (コスト: <span id="size-cost">10</span>)</button>
+                    </div>
+                    <div class="upgrade-item">
+                        <span>体力強化 (Lv <span id="hp-lv">1</span>)</span>
+                        <button id="upgrade-hp">強化 (コスト: <span id="hp-cost">20</span>)</button>
+                    </div>
+                    <div class="upgrade-item">
+                        <span>研究効率 (Lv <span id="res-lv">1</span>)</span>
+                        <button id="upgrade-res">強化 (コスト: <span id="res-cost">30</span>)</button>
+                    </div>
+                    <div class="upgrade-item">
+                        <span>α種対応 (Lv <span id="alpha-lv">0</span>)</span>
+                        <button id="upgrade-alpha">強化 (コスト: 50)</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 研究タブ -->
+            <div id="research-tab" class="tab-content">
+                <h2>研究所</h2>
+                <div class="lab-container">
+                    <div id="research-lab" title="クリックして研究開始">
+                        <div class="lab-icon">🧪</div>
+                        <span>研究所</span>
+                    </div>
+                    <div class="progress-container">
+                        <div id="research-progress-bar"></div>
+                    </div>
+                    <div class="research-controls">
+                        <button id="btn-minus-100" class="batch-btn">-100</button>
+                        <button id="btn-minus-10" class="batch-btn">-10</button>
+                        <button id="btn-minus">−1</button>
+                        <span id="research-target-count">0</span>
+                        <button id="btn-plus">+1</button>
+                        <button id="btn-plus-10" class="batch-btn">+10</button>
+                        <button id="btn-plus-100" class="batch-btn">+100</button>
+                    </div>
+                    <p class="research-note">撃退したウイルス 1 個につき 1 ポイントに変換（0.5秒/個）</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- タブナビゲーション -->
+        <nav id="tab-nav">
+            <button class="tab-btn active" data-tab="game-tab">
+                <span class="tab-icon">🎮</span>
+                <span class="tab-text">ゲーム</span>
+            </button>
+            <button class="tab-btn" data-tab="map-selection-tab">
+                <span class="tab-icon">🗺️</span>
+                <span class="tab-text">マップ</span>
+            </button>
+            <button class="tab-btn" data-tab="player-tab">
+                <span class="tab-icon">👤</span>
+                <span class="tab-text">ステータス</span>
+            </button>
+            <button class="tab-btn" data-tab="upgrade-tab">
+                <span class="tab-icon">⚡</span>
+                <span class="tab-text">強化</span>
+            </button>
+            <button class="tab-btn" data-tab="research-tab">
+                <span class="tab-icon">🧪</span>
+                <span class="tab-text">研究</span>
+            </button>
+        </nav>
+    </div>
+    <script src="game.js"></script>
+</body>
+
+</html>
