@@ -19,7 +19,8 @@ body {
 }
 
 #main-container {
-    width: 450px;
+    width: 100%;
+    max-width: 450px;
     height: 90vh;
     background: #2d2d2d;
     border-radius: 16px;
@@ -27,6 +28,7 @@ body {
     flex-direction: column;
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
     border: 1px solid #444;
+    margin: 0 auto;
 }
 
 /* HUDバー (画面上部) */
@@ -88,7 +90,7 @@ body {
 
 .tab-content {
     display: none;
-    height: 100%;
+    min-height: 100%;
 }
 
 .tab-content.active {
@@ -105,6 +107,40 @@ body {
     border-radius: 8px;
     overflow: hidden;
     line-height: 0;
+    max-width: 100%;
+}
+
+/* 移動ボタンコンテナ */
+#mobile-controls {
+    display: flex;
+    justify-content: center;
+    gap: 40px;
+    padding: 10px 0;
+    width: 100%;
+}
+
+.move-btn {
+    width: 60px;
+    height: 60px;
+    cursor: pointer;
+    transition: transform 0.1s;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.move-btn img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.move-btn:active {
+    transform: scale(0.9);
+}
+
+#gameCanvas {
+    max-width: 100%;
+    height: auto;
 }
 
 /* タブナビゲーション (フッター刷新) */
@@ -536,8 +572,30 @@ body {
 
 /* 研究タブ */
 #research-tab h2 {
-    margin-top: 20px;
+    margin-top: 10px;
+    margin-bottom: 10px;
     color: #3498db;
+}
+
+.research-scroll-container {
+    width: 100%;
+    /* コンテンツエリア全体でスクロールするため、ここでは不要 */
+    padding-bottom: 20px;
+}
+
+.lab-divider {
+    width: 80%;
+    height: 2px;
+    background: linear-gradient(to right, transparent, #3498db, transparent);
+    margin: 20px auto;
+}
+
+.lab-container h3 {
+    margin: 0 0 15px 0;
+    color: #fff;
+    font-size: 18px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
 }
 
 .lab-container {
@@ -545,7 +603,19 @@ body {
     flex-direction: column;
     align-items: center;
     width: 100%;
-    padding-top: 30px;
+    padding: 10px 0;
+}
+
+.purify-info {
+    margin-bottom: 15px;
+    text-align: center;
+}
+
+.purify-info p {
+    margin: 4px 0;
+    font-size: 14px;
+    color: #f1c40f;
+    font-weight: bold;
 }
 
 #research-lab {
@@ -651,4 +721,237 @@ body {
 .research-note {
     font-size: 12px;
     color: #888;
+}
+
+/* 治療タブ */
+#treatment-tab h2 {
+    margin-top: 20px;
+    color: #e67e22;
+}
+
+.treatment-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    position: relative;
+    padding: 20px;
+}
+
+.treatment-money-display {
+    position: absolute;
+    top: 5px;
+    right: 20px;
+    font-size: 20px;
+    font-weight: 900;
+    color: #f1c40f;
+    text-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+    background: rgba(0, 0, 0, 0.3);
+    padding: 5px 15px;
+    border-radius: 20px;
+    border: 1px solid rgba(241, 196, 15, 0.3);
+}
+
+#hospital-area {
+    margin: 40px 0;
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 200px;
+    height: 200px;
+}
+
+#hospital-area::before {
+    content: '🏥';
+    font-size: 100px;
+    position: absolute;
+    z-index: 1;
+}
+
+#hospital-img {
+    width: 200px;
+    height: 200px;
+    object-fit: contain;
+    filter: drop-shadow(0 0 15px rgba(231, 76, 60, 0.3));
+    transition: transform 0.2s;
+    position: relative;
+    z-index: 2;
+}
+
+#hospital-img.shake {
+    animation: hospitalShake 0.4s ease;
+}
+
+@keyframes hospitalShake {
+    0% {
+        transform: translate(0, 0) scale(1);
+    }
+
+    25% {
+        transform: translate(-5px, 0) scale(1.05);
+    }
+
+    50% {
+        transform: translate(5px, 0) scale(1.05);
+    }
+
+    75% {
+        transform: translate(-5px, 0) scale(1.05);
+    }
+
+    100% {
+        transform: translate(0, 0) scale(1);
+    }
+}
+
+.medicine-display {
+    font-size: 24px;
+    font-weight: bold;
+    margin-bottom: 30px;
+    background: #333;
+    padding: 10px 30px;
+    border-radius: 30px;
+    border: 2px solid #e67e22;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.medicine-icon {
+    font-size: 32px;
+}
+
+.premium-btn {
+    background: linear-gradient(135deg, #e67e22 0%, #d35400 100%);
+    color: white;
+    border: none;
+    padding: 15px 50px;
+    font-size: 24px;
+    font-weight: 900;
+    border-radius: 40px;
+    cursor: pointer;
+    box-shadow: 0 6px 0 #a04000, 0 8px 15px rgba(0, 0, 0, 0.4);
+    transition: transform 0.1s, box-shadow 0.1s;
+    margin-bottom: 20px;
+}
+
+.premium-btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 0 #a04000, 0 10px 20px rgba(0, 0, 0, 0.5);
+    background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
+}
+
+.premium-btn:active:not(:disabled) {
+    transform: translateY(4px);
+    box-shadow: 0 2px 0 #a04000, 0 3px 5px rgba(0, 0, 0, 0.5);
+}
+
+.premium-btn:disabled {
+    background: #555;
+    box-shadow: 0 4px 0 #333;
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.treatment-note {
+    font-size: 14px;
+    color: #888;
+    text-align: center;
+}
+
+.money-popup {
+    position: absolute;
+    font-size: 24px;
+    font-weight: 900;
+    color: #f1c40f;
+    pointer-events: none;
+    animation: floatUpFade 1s forwards;
+    z-index: 100;
+    text-shadow: 0 0 5px rgba(0, 0, 0, 1);
+    top: 50%;
+    left: 50%;
+}
+
+@keyframes floatUpFade {
+    0% {
+        transform: translate(-50%, 0);
+        opacity: 1;
+    }
+
+    100% {
+        transform: translate(-50%, -100px);
+        opacity: 0;
+    }
+}
+
+/* モバイル対応 (レスポンシブ) */
+@media (max-width: 480px) {
+    #main-container {
+        height: 100vh;
+        border-radius: 0;
+    }
+
+    #hud-bar {
+        font-size: 10px;
+        padding: 5px 2px;
+    }
+
+    .hud-value {
+        font-size: 12px;
+    }
+
+    #tab-nav {
+        height: 70px;
+    }
+
+    .tab-text {
+        font-size: 9px;
+    }
+
+    .tab-icon {
+        font-size: 20px;
+    }
+
+    .upgrade-item {
+        padding: 10px;
+    }
+
+    .upgrade-item span {
+        font-size: 14px;
+    }
+
+    .upgrade-item button {
+        width: 120px;
+        font-size: 14px;
+        padding: 8px 0;
+    }
+
+    .research-controls button {
+        padding: 6px 8px;
+        font-size: 12px;
+        min-width: 35px;
+    }
+
+    #profile-img {
+        width: 100px;
+        height: 100px;
+    }
+
+    .stat-item {
+        font-size: 16px;
+    }
+
+    #open-map-btn {
+        width: 120px;
+        height: 120px;
+    }
+}
+
+@media (max-width: 360px) {
+    .hud-label {
+        display: none;
+        /* 極端に狭い場合はラベルを消す */
+    }
 }
