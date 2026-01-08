@@ -201,6 +201,7 @@ function checkStageUnlocks() {
         const nextStage = stages[currentIdx + 1];
         if (!state.unlockedStages.includes(nextStage)) {
             state.unlockedStages.push(nextStage);
+            saveGame();
         }
     }
 }
@@ -298,26 +299,30 @@ function updateUI() {
     if (btnTreat) btnTreat.disabled = state.medicine <= 0;
 }
 
+// リセット機能
 document.getElementById('reset-button').addEventListener('click', () => {
-    if (confirm('リセットしますか？')) {
+    if (confirm('リセットしますか？ すべてのセーブデータが消去されます。')) {
         state.virusTotal = 0; state.antibodyPoints = 0; state.money = 0; state.fragments = 0;
         state.medicine = 0; state.medicinePlus = 0;
         state.atkLv = 1; state.sizeLv = 1; state.hpLv = 1; state.resLv = 1; state.alphaLv = 0;
         state.maxHp = 50; state.hp = 50;
         state.isResearching = false; state.isMapMode = false;
         state.viruses = []; state.bullets = []; state.comboCount = 0;
+        state.unlockedStages = ['map1-1'];
+        state.lastClearedStage = null;
+
+        localStorage.removeItem("virusShooterSave");
         updateUI();
     }
 });
-
 // Upgrades
 document.getElementById('upgrade-atk').onclick = () => {
     const cost = state.atkLv * 10;
-    if (state.antibodyPoints >= cost) { state.antibodyPoints -= cost; state.atkLv++; updateUI(); }
+    if (state.antibodyPoints >= cost) { state.antibodyPoints -= cost; state.atkLv++; updateUI(); saveGame(); }
 };
 document.getElementById('upgrade-size').onclick = () => {
     const cost = state.sizeLv * 10;
-    if (state.antibodyPoints >= cost) { state.antibodyPoints -= cost; state.sizeLv++; updateUI(); }
+    if (state.antibodyPoints >= cost) { state.antibodyPoints -= cost; state.sizeLv++; updateUI(); saveGame(); }
 };
 document.getElementById('upgrade-hp').onclick = () => {
     const cost = state.hpLv * 20;
@@ -327,17 +332,18 @@ document.getElementById('upgrade-hp').onclick = () => {
         state.maxHp += 10;
         if (!state.isMapMode) state.hp = state.maxHp;
         updateUI();
+        saveGame();
     }
 };
 document.getElementById('upgrade-res').onclick = () => {
     if (state.resLv >= 5) return;
     const cost = state.resLv * 30;
-    if (state.antibodyPoints >= cost) { state.antibodyPoints -= cost; state.resLv++; updateUI(); }
+    if (state.antibodyPoints >= cost) { state.antibodyPoints -= cost; state.resLv++; updateUI(); saveGame(); }
 };
 document.getElementById('upgrade-alpha').onclick = () => {
     if (state.alphaLv >= 3) return;
     const cost = 50 + state.alphaLv * 100;
-    if (state.antibodyPoints >= cost) { state.antibodyPoints -= cost; state.alphaLv++; updateUI(); }
+    if (state.antibodyPoints >= cost) { state.antibodyPoints -= cost; state.alphaLv++; updateUI(); saveGame(); }
 };
 
 // Research
@@ -609,6 +615,7 @@ function showRewardScreen() {
 
 document.getElementById('reward-close-btn').onclick = () => {
     switchTab('map-selection-tab');
+    saveGame();
 };
 
 function checkCollision(r1, r2) {
@@ -769,4 +776,47 @@ function gameLoop(timestamp) {
     requestAnimationFrame(gameLoop);
 }
 
+// --- Save/Load System ---
+function saveGame() {
+    const saveData = {
+        virusTotal: state.virusTotal,
+        antibodyPoints: state.antibodyPoints,
+        money: state.money,
+        fragments: state.fragments,
+        medicine: state.medicine,
+        atkLv: state.atkLv,
+        sizeLv: state.sizeLv,
+        hpLv: state.hpLv,
+        resLv: state.resLv,
+        alphaLv: state.alphaLv,
+        maxHp: state.maxHp,
+        unlockedStages: state.unlockedStages,
+        lastClearedStage: state.lastClearedStage,
+        purifyTargetPoints: state.purifyTargetPoints
+    };
+    localStorage.setItem("virusShooterSave", JSON.stringify(saveData));
+}
+
+function loadGame() {
+    const saved = localStorage.getItem("virusShooterSave");
+    if (!saved) return;
+    try {
+        const data = JSON.parse(saved);
+        Object.keys(data).forEach(key => {
+            if (key in state) state[key] = data[key];
+        });
+        state.hp = state.maxHp;
+        updateUI();
+    } catch (e) {
+        console.error("Failed to load save data", e);
+    }
+}
+
+// 起動時にロード
+loadGame();
+
+// 1分おきに定期オートセーブ
+setInterval(saveGame, 60000);
+
 updateUI();
+gameLoop();
