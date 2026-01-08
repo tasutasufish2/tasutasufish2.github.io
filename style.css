@@ -101,19 +101,28 @@ body {
 }
 
 #game-tab.active {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    height: 100%;
     overflow: hidden;
-    justify-content: center;
 }
 
 /* ゲーム画面 */
 #game-container {
     position: relative;
     border: 4px solid #333;
-    background-color: #000;
+    background: #000 url('background.png') no-repeat center center;
+    background-size: cover;
     border-radius: 8px;
     overflow: hidden;
     line-height: 0;
-    max-width: 100%;
+    width: 100%;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
 /* 移動ボタンコンテナ */
@@ -151,7 +160,10 @@ body {
 
 #gameCanvas {
     max-width: 100%;
+    max-height: 100%;
+    width: auto;
     height: auto;
+    object-fit: contain;
 }
 
 /* タブナビゲーション (フッター刷新) */
@@ -907,13 +919,12 @@ body {
     #hud-bar {
         font-size: 10px;
         padding: 5px 2px;
-        height: 40px;
-        /* 高さを固定 */
+        height: auto;
+        min-height: 40px;
     }
 
     #content-area {
         padding: 5px;
-        /* パディングを減らす */
     }
 
     .hud-value {
@@ -922,7 +933,6 @@ body {
 
     #tab-nav {
         height: 60px;
-        /* 高さをさらに抑える */
     }
 
     .tab-text {
@@ -936,6 +946,7 @@ body {
     #mobile-controls {
         padding: 5px 0;
         gap: 30px;
+        flex-shrink: 0;
     }
 
     .move-btn {
@@ -943,24 +954,12 @@ body {
         height: 50px;
     }
 
+    /* game-containerとgameCanvasは親のflex設定に従う */
     #game-container {
-        flex-shrink: 1;
-        /* 縮小を許可 */
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        max-height: calc(100vh - 120px);
-        /* HUD(40) + Nav(60) + Controls(20) 程度を引く */
+        padding: 0;
+        margin: 0;
     }
 
-    #gameCanvas {
-        max-height: 100%;
-        width: auto;
-        /* 高さに合わせる */
-        object-fit: contain;
-    }
-
-    /* 他のスタイルは据え置き、または適宜調整 */
     .upgrade-item {
         padding: 10px;
     }
