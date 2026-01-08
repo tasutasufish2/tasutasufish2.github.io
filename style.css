@@ -9,13 +9,11 @@ body {
     margin: 0;
     overflow: hidden;
     user-select: none;
-    /* テキスト選択を無効化 */
     -webkit-user-select: none;
-    /* Safari用 */
     -moz-user-select: none;
-    /* Firefox用 */
     -ms-user-select: none;
-    /* IE/Edge用 */
+    touch-action: manipulation;
+    /* ダブルタップズームを防止 */
 }
 
 #main-container {
@@ -130,7 +128,8 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
-    gap: 20px;
+    gap: 15px;
+    /* ボタン並び順変更に伴い間隔を微調整 */
     padding: 10px 0;
     width: 100%;
 }
