@@ -39,6 +39,15 @@
                     <canvas id="gameCanvas" width="400" height="600"></canvas>
                     <button id="open-map-btn">マップ</button>
                 </div>
+                <!-- 左右移動ボタン -->
+                <div id="mobile-controls">
+                    <div id="btn-move-left" class="move-btn">
+                        <img src="arrow_left.png" alt="Left">
+                    </div>
+                    <div id="btn-move-right" class="move-btn">
+                        <img src="arrow_right.png" alt="Right">
+                    </div>
+                </div>
             </div>
 
             <!-- マップ選択タブ -->
@@ -146,25 +155,76 @@
 
             <!-- 研究タブ -->
             <div id="research-tab" class="tab-content">
-                <h2>研究所</h2>
-                <div class="lab-container">
-                    <div id="research-lab" title="クリックして研究開始">
-                        <div class="lab-icon">🧪</div>
-                        <span>研究所</span>
+                <h2>研究所・精製</h2>
+                <div class="research-scroll-container">
+                    <div class="lab-container">
+                        <h3>ウイルス研究</h3>
+                        <div id="research-lab" title="クリックして研究開始">
+                            <div class="lab-icon">🧪</div>
+                            <span>研究所</span>
+                        </div>
+                        <div class="progress-container">
+                            <div id="research-progress-bar"></div>
+                        </div>
+                        <div class="research-controls">
+                            <button id="btn-minus-100" class="batch-btn">-100</button>
+                            <button id="btn-minus-10" class="batch-btn">-10</button>
+                            <button id="btn-minus">−1</button>
+                            <span id="research-target-count">0</span>
+                            <button id="btn-plus">+1</button>
+                            <button id="btn-plus-10" class="batch-btn">+10</button>
+                            <button id="btn-plus-100" class="batch-btn">+100</button>
+                        </div>
+                        <p class="research-note">撃退したウイルス 1 個につき 1 ポイントに変換（0.5秒/個）</p>
                     </div>
-                    <div class="progress-container">
-                        <div id="research-progress-bar"></div>
+
+                    <div class="lab-divider"></div>
+
+                    <div class="lab-container">
+                        <h3>抗体精製</h3>
+                        <div id="purify-lab" title="クリックして精製開始">
+                            <div class="lab-icon">⚗️</div>
+                            <span>精製所</span>
+                        </div>
+                        <div class="progress-container">
+                            <div id="purify-progress-bar"></div>
+                        </div>
+                        <div class="research-controls">
+                            <button id="btn-purify-minus-100" class="batch-btn">-100</button>
+                            <button id="btn-purify-minus-10" class="batch-btn">-10</button>
+                            <button id="btn-purify-minus">−1</button>
+                            <span id="purify-target-count">30</span>
+                            <button id="btn-purify-plus">+1</button>
+                            <button id="btn-purify-plus-10" class="batch-btn">+10</button>
+                            <button id="btn-purify-plus-100" class="batch-btn">+100</button>
+                        </div>
+                        <div class="purify-info">
+                            <p>消費: <span id="purify-total-points">30</span> 抗体ポイント</p>
+                            <p>必要時間: <span id="purify-total-time-display">30</span> 秒</p>
+                        </div>
+                        <button id="btn-purify-start" class="premium-btn"
+                            style="font-size: 16px; padding: 10px 30px;">精製開始</button>
+                        <p class="research-note">30ポイントにつき治療薬1個を生成します</p>
                     </div>
-                    <div class="research-controls">
-                        <button id="btn-minus-100" class="batch-btn">-100</button>
-                        <button id="btn-minus-10" class="batch-btn">-10</button>
-                        <button id="btn-minus">−1</button>
-                        <span id="research-target-count">0</span>
-                        <button id="btn-plus">+1</button>
-                        <button id="btn-plus-10" class="batch-btn">+10</button>
-                        <button id="btn-plus-100" class="batch-btn">+100</button>
+                </div>
+            </div>
+
+            <!-- 治療タブ -->
+            <div id="treatment-tab" class="tab-content">
+                <h2>病院・治療</h2>
+                <div class="treatment-container">
+                    <div class="treatment-money-display">
+                        お金: <span id="treatment-money">0</span>
                     </div>
-                    <p class="research-note">撃退したウイルス 1 個につき 1 ポイントに変換（0.5秒/個）</p>
+                    <div id="hospital-area">
+                        <img src="hospital.png" alt="Hospital" id="hospital-img">
+                        <div id="treatment-effect-container"></div>
+                    </div>
+                    <div class="medicine-display">
+                        <span class="medicine-icon">💊</span> 治療薬 × <span id="medicine-count">0</span>
+                    </div>
+                    <button id="btn-treat" class="premium-btn">治療を行う</button>
+                    <p class="treatment-note">治療薬を 1 個消費して人々を治療し、お金を獲得します</p>
                 </div>
             </div>
         </div>
@@ -190,6 +250,10 @@
             <button class="tab-btn" data-tab="research-tab">
                 <span class="tab-icon">🧪</span>
                 <span class="tab-text">研究</span>
+            </button>
+            <button class="tab-btn" data-tab="treatment-tab">
+                <span class="tab-icon">🏥</span>
+                <span class="tab-text">治療</span>
             </button>
         </nav>
     </div>
