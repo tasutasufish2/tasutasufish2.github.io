@@ -71,7 +71,6 @@ let state = {
     money: 0,
     fragments: 0,
     medicine: 0,
-    medicinePlus: 0,
 
     atkLv: 1,
     sizeLv: 1,
@@ -95,6 +94,10 @@ let state = {
     particles: [],
     activeDebuffs: [],
 
+    // Boosts
+    immuneAtkDownTimer: 0,
+    doubleAtkTimer: 0,
+
     // Map Specific
     isMapMode: false,
     currentStageId: "",
@@ -106,7 +109,15 @@ let state = {
     mapFadeTimer: 0,
 
     unlockedStages: ['map1-1'],
+    unlockedStages: ['map1-1'],
+    unlockedStages: ['map1-1'],
     lastClearedStage: null,
+    clearedStages: [], // クリア済みステージのリスト
+    stageClearCounts: {}, // { stageId: count } - ステージごとのクリア回数
+
+    // Boss State
+    boss: null, // { x, y, width, height, hp, maxHp, phase, invulnerable, actionTimer, bullets: [] }
+
 
     player: {
         x: SCREEN_WIDTH / 2 - 32,
@@ -207,15 +218,12 @@ if (btnFireRight) {
     btnFireRight.addEventListener('pointerleave', endFire);
 }
 
-window.toggleMapDetails = function (id) {
-    const el = document.getElementById(id);
-    el.classList.toggle('active');
-};
+
 
 window.startMap = function (id, quota) {
     state.isMapMode = true;
     state.currentStageId = id;
-    state.currentStageName = id.replace('map1', 'マップ①').replace('-', 'ー');
+    state.currentStageName = id.replace('map1', 'マップ①').replace('map2', 'マップ②').replace('-', 'ー').replace('boss', 'BOSS');
     state.mapQuota = quota;
     state.mapKills = 0;
     state.hp = state.maxHp;
@@ -224,17 +232,80 @@ window.startMap = function (id, quota) {
     state.bullets = [];
     state.comboCount = 0;
     state.activeDebuffs = [];
+
+    // Boss Setup
+    if (id === 'map1-boss') {
+        state.boss = {
+            x: SCREEN_WIDTH / 2 - 75, // 150px width
+            y: 50,
+            width: 150,
+            height: 150,
+            width: 150,
+            height: 150,
+            hp: 1500, // 強化: 300 -> 1500 (5倍)
+            maxHp: 1500,
+            phase: 1,
+            phase: 1,
+            invulnerable: false,
+            invulnerableTimer: 0,
+            actionTimer: 0,
+            bullets: [],
+            targetY: 50 // 目標Y座標（フェーズ移行などで使用）
+        };
+        state.mapQuota = 1; // ダミー
+        state.mapQuota = 1; // ダミー
+    } else if (id === 'map2-boss') {
+        state.boss = {
+            x: SCREEN_WIDTH / 2 - 75,
+            y: 50,
+            width: 150,
+            height: 150,
+            hp: 1950, // 1500 * 1.3
+            maxHp: 1950,
+            phase: 1,
+            phase: 1,
+            invulnerable: false,
+            invulnerableTimer: 0,
+            actionTimer: 0,
+            bullets: [],
+            targetY: 50
+        };
+        state.mapQuota = 1;
+    } else {
+        state.boss = null;
+    }
+
     switchTab('game-tab');
 };
 
+// Map UI Logic
+function toggleMapDetails(id) {
+    const el = document.getElementById(id);
+    if (el) {
+        el.style.display = el.style.display === 'none' ? 'block' : 'none';
+        const arrow = el.parentElement.querySelector('.arrow');
+        if (arrow) arrow.innerText = el.style.display === 'none' ? '▼' : '▲';
+    }
+}
+window.toggleMapDetails = toggleMapDetails;
+
 function checkStageUnlocks() {
-    const stages = ['map1-1', 'map1-2', 'map1-3'];
-    const currentIdx = stages.indexOf(state.lastClearedStage);
-    if (currentIdx !== -1 && currentIdx < stages.length - 1) {
-        const nextStage = stages[currentIdx + 1];
-        if (!state.unlockedStages.includes(nextStage)) {
-            state.unlockedStages.push(nextStage);
-            saveGame();
+    // 順番リスト: マップ1系 -> マップ2系
+    const stages = [
+        'map1-1', 'map1-2', 'map1-3', 'map1-boss',
+        'map2-1', 'map2-2', 'map2-3', 'map2-boss'
+    ];
+
+    // 順番にチェックして、クリア済みなら次のステージを解放
+    for (let i = 0; i < stages.length - 1; i++) {
+        const currentStage = stages[i];
+        const nextStage = stages[i + 1];
+
+        if (state.clearedStages.includes(currentStage)) {
+            if (!state.unlockedStages.includes(nextStage)) {
+                state.unlockedStages.push(nextStage);
+                saveGame();
+            }
         }
     }
 }
@@ -245,6 +316,22 @@ function updateUI() {
     // Map Stage Buttons
     document.querySelectorAll('.stage-btn').forEach(btn => {
         const stageId = btn.getAttribute('data-stage');
+
+        // クリアバッジ処理
+        const existingBadge = btn.querySelector('.clear-badge');
+        if (state.clearedStages.includes(stageId)) {
+            if (!existingBadge) {
+                const badge = document.createElement('span');
+                badge.className = 'clear-badge';
+                badge.innerText = 'CLEAR!';
+                btn.appendChild(badge);
+            }
+            btn.classList.add('cleared');
+        } else {
+            if (existingBadge) existingBadge.remove();
+            btn.classList.remove('cleared');
+        }
+
         if (state.unlockedStages.includes(stageId)) {
             btn.disabled = false;
             btn.style.opacity = "1";
@@ -330,13 +417,56 @@ function updateUI() {
     if (medicineCountDisplay) medicineCountDisplay.innerText = state.medicine;
     if (treatmentMoneyDisplay) treatmentMoneyDisplay.innerText = state.money;
     if (btnTreat) btnTreat.disabled = state.medicine <= 0;
+
+    // ショップUI更新
+    const shopMoneyDisplay = document.getElementById('shop-money-display');
+    if (shopMoneyDisplay) shopMoneyDisplay.innerText = state.money;
+
+    const btnBuyImmune = document.getElementById('btn-buy-immune');
+    if (btnBuyImmune) btnBuyImmune.disabled = state.money < 500;
+
+    const btnBuyDouble = document.getElementById('btn-buy-double');
+    if (btnBuyDouble) btnBuyDouble.disabled = state.money < 500;
+
+    const btnExchange = document.getElementById('btn-exchange-fragment');
+    if (btnExchange) btnExchange.disabled = state.money < 100;
+
+    // ブーストインジケーター（ゲーム画面用）
+    updateBoostIndicators();
+}
+
+function updateBoostIndicators() {
+    let boostContainer = document.getElementById('active-boosts');
+    if (!boostContainer && state.activeTab === 'game-tab') {
+        const gameContainer = document.getElementById('game-container');
+        if (gameContainer) {
+            boostContainer = document.createElement('div');
+            boostContainer.id = 'active-boosts';
+            gameContainer.appendChild(boostContainer);
+        }
+    }
+    if (boostContainer) {
+        boostContainer.innerHTML = '';
+        if (state.immuneAtkDownTimer > 0) {
+            const tag = document.createElement('div');
+            tag.className = 'active-boost-tag';
+            tag.innerText = `🛡️ デバフ無効: ${Math.ceil(state.immuneAtkDownTimer)}s`;
+            boostContainer.appendChild(tag);
+        }
+        if (state.doubleAtkTimer > 0) {
+            const tag = document.createElement('div');
+            tag.className = 'active-boost-tag';
+            tag.innerText = `🔥 攻撃力3倍: ${Math.ceil(state.doubleAtkTimer)}s`;
+            boostContainer.appendChild(tag);
+        }
+    }
 }
 
 // リセット機能
 document.getElementById('reset-button').addEventListener('click', () => {
     if (confirm('リセットしますか？ すべてのセーブデータが消去されます。')) {
         state.virusTotal = 0; state.antibodyPoints = 0; state.money = 0; state.fragments = 0;
-        state.medicine = 0; state.medicinePlus = 0;
+        state.medicine = 0;
         state.atkLv = 1; state.sizeLv = 1; state.hpLv = 1; state.resLv = 1; state.alphaLv = 0;
         state.maxHp = 50; state.hp = 50;
         state.isResearching = false; state.isMapMode = false;
@@ -436,6 +566,36 @@ document.getElementById('btn-purify-minus-10').onclick = () => adjustPurifyTarge
 document.getElementById('btn-purify-plus-100').onclick = () => adjustPurifyTarget(100);
 document.getElementById('btn-purify-minus-100').onclick = () => adjustPurifyTarget(-100);
 
+// --- Shop Logic ---
+function buyBoost(type) {
+    if (state.money < 500) return;
+    state.money -= 500;
+    if (type === 'immune') {
+        state.immuneAtkDownTimer = 60;
+        addFloatingText(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2, "攻撃低下無効 発動！", "#ffd700", 30);
+    } else if (type === 'double') {
+        state.doubleAtkTimer = 60;
+        addFloatingText(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2, "攻撃力3倍 発動！", "#ff4500", 30);
+    }
+    updateUI();
+    saveGame();
+}
+
+const btnBuyImmune = document.getElementById('btn-buy-immune');
+if (btnBuyImmune) btnBuyImmune.onclick = () => buyBoost('immune');
+const btnBuyDouble = document.getElementById('btn-buy-double');
+if (btnBuyDouble) btnBuyDouble.onclick = () => buyBoost('double');
+
+document.getElementById('btn-exchange-fragment').onclick = () => {
+    if (state.money < 100) return;
+    state.money -= 100;
+    state.fragments += 1;
+    createSparks(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2, "#ffd700");
+    addFloatingText(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 30, "欠片 +1", "#ffd700", 24);
+    updateUI();
+    saveGame();
+};
+
 // --- Game Logic ---
 
 function createSparks(x, y, color = null) {
@@ -449,12 +609,21 @@ function addFloatingText(x, y, text, color = '#fff', size = 20) {
 }
 
 function spawnVirus(timestamp) {
+    if (state.activeTab !== 'game-tab') return;
+
+    // ボス戦中は雑魚敵を出さない (二重チェック)
+    if (state.isMapMode && (state.currentStageId === 'map1-boss' || state.currentStageId === 'map2-boss')) return;
+
+    // マップ2の同時出現数制限 (2体まで)
+    if (state.currentStageId && state.currentStageId.startsWith('map2') && state.viruses.length >= 2) return;
+
     if (timestamp - state.lastVirusSpawn > state.spawnInterval) {
         // Bug Fix: 以前は state.killCountInSession を使っていたが、通常モードでリセットされないことがあった
-        // 確率制 (15%) に変更
+        // 確率制
         let isStrong = Math.random() < 0.15;
-
-        if (state.isMapMode && state.currentStageName.indexOf("マップ①") !== -1) {
+        if (state.currentStageId && state.currentStageId.startsWith('map2')) {
+            isStrong = Math.random() < 0.3; // マップ2は30%
+        } else if (state.isMapMode && state.currentStageName.indexOf("マップ①") !== -1) {
             isStrong = false;
         }
 
@@ -471,8 +640,8 @@ function spawnVirus(timestamp) {
             width: isStrong ? 60 : 50,
             height: isStrong ? 60 : 50,
             isStrong: isStrong,
-            hp: isStrong ? 100 : 10,
-            maxHp: isStrong ? 100 : 10,
+            hp: (isStrong ? 100 : 10) * (state.currentStageId && state.currentStageId.startsWith('map2') ? 1.3 : 1.0),
+            maxHp: (isStrong ? 100 : 10) * (state.currentStageId && state.currentStageId.startsWith('map2') ? 1.3 : 1.0),
             speed: 2.5 * speedBoost,
             lastAITime: timestamp,
             targetSlide: 0
@@ -484,12 +653,22 @@ function spawnVirus(timestamp) {
 function updateGame(timestamp) {
     if (state.activeTab !== 'game-tab') return;
 
+    // ボス Logic
+    if (state.isMapMode && (state.currentStageId === 'map1-boss' || state.currentStageId === 'map2-boss') && state.boss) {
+        updateBoss(timestamp);
+    }
+
     let currentAtkMultiplier = 1.0;
     state.activeDebuffs = state.activeDebuffs.filter(d => d.endTime > timestamp);
     for (const d of state.activeDebuffs) currentAtkMultiplier *= d.multiplier;
 
     const baseAtk = 10 + (state.atkLv - 1) * 5;
-    const finalAtk = Math.max(1, Math.floor(baseAtk * currentAtkMultiplier));
+    let finalAtk = Math.max(1, Math.floor(baseAtk * currentAtkMultiplier));
+
+    // 攻撃力3倍ブースト
+    if (state.doubleAtkTimer > 0) {
+        finalAtk *= 3;
+    }
 
     if (keys.ArrowLeft && state.player.x > 0) state.player.x -= state.player.speed;
     if (keys.ArrowRight && state.player.x < SCREEN_WIDTH - state.player.width) state.player.x += state.player.speed;
@@ -503,6 +682,116 @@ function updateGame(timestamp) {
     for (let i = state.bullets.length - 1; i >= 0; i--) {
         state.bullets[i].y -= 10;
         if (state.bullets[i].y < -30) { state.bullets.splice(i, 1); state.comboCount = 0; }
+    }
+
+    // ブーストタイマー更新 (60fps想定で1/60ずつ減算)
+    if (state.immuneAtkDownTimer > 0) state.immuneAtkDownTimer = Math.max(0, state.immuneAtkDownTimer - 1 / 60);
+    if (state.doubleAtkTimer > 0) state.doubleAtkTimer = Math.max(0, state.doubleAtkTimer - 1 / 60);
+
+    if (state.activeTab === 'game-tab') updateBoostIndicators();
+
+    spawnVirus(timestamp);
+
+
+    function updateBoss(timestamp) {
+        const boss = state.boss;
+
+        // 勝利判定
+        if (boss.hp <= 0) {
+            state.mapKills = 1; // ノルマ達成扱い
+            state.boss = null; // ボス消去
+            showRewardScreen();
+            return;
+        }
+
+        // 敗北条件：下端到達
+        if (boss.y + boss.height >= SCREEN_HEIGHT - 100) {
+            state.hp = 0;
+            checkGameState();
+            return;
+        }
+
+        // 無敵状態管理（フェーズ移行）
+        if (boss.invulnerable) {
+            boss.invulnerableTimer--;
+            // 上に戻る動き
+            if (boss.y > 50) boss.y -= 5;
+            if (boss.invulnerableTimer <= 0 && boss.y <= 50) {
+                boss.invulnerable = false;
+            }
+            return; // 無敵中は攻撃しない
+        }
+
+        // 行動AI (0.5秒ごと)
+        if (timestamp - boss.actionTimer > 500) {
+            const action = Math.random();
+            if (action < 0.4) {
+                // 移動 (左右 + 少し下へ)
+                // 移動 (左右 + 少し下へ)
+                const moveX = (Math.random() - 0.5) * 60;
+                boss.x = Math.max(0, Math.min(SCREEN_WIDTH - boss.width, boss.x + moveX));
+                boss.y += 3; // 強化: 2 -> 3 (1.5倍)
+            } else if (action < 0.8) {
+                // 弾発射 (プレイヤー狙い直線弾)
+                const dx = (state.player.x + state.player.width / 2) - (boss.x + boss.width / 2);
+                const dy = (state.player.y + state.player.height / 2) - (boss.y + boss.height / 2);
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                const speed = 4;
+                boss.bullets.push({
+                    x: boss.x + boss.width / 2 - 10,
+                    y: boss.y + boss.height,
+                    vx: (dx / dist) * speed,
+                    vy: (dy / dist) * speed,
+                    width: 20,
+                    height: 20
+                });
+            }
+            // 残り0.2は待機
+            boss.actionTimer = timestamp;
+        }
+
+        // ボス弾の更新
+        for (let i = boss.bullets.length - 1; i >= 0; i--) {
+            const b = boss.bullets[i];
+            b.x += b.vx;
+            b.y += b.vy;
+
+            // 当たり判定
+            if (checkCollision({ x: b.x, y: b.y, width: b.width, height: b.height }, state.player)) {
+                state.hp -= 10;
+                addFloatingText(state.player.x + state.player.width / 2, state.player.y, "-10 HP", "red", 24);
+                boss.bullets.splice(i, 1);
+                checkGameState();
+                continue;
+            }
+
+            if (b.y > SCREEN_HEIGHT || b.x < 0 || b.x > SCREEN_WIDTH) {
+                boss.bullets.splice(i, 1);
+            }
+        }
+
+        // プレイヤー弾との当たり判定
+        for (let j = state.bullets.length - 1; j >= 0; j--) {
+            const b = state.bullets[j];
+            if (checkCollision({ x: boss.x, y: boss.y, width: boss.width, height: boss.height }, b)) {
+                boss.hp -= b.damage;
+                createSparks(b.x, b.y);
+                addFloatingText(boss.x + boss.width / 2, boss.y + boss.height / 2, `-${b.damage}`, "#ff4757", 20);
+                state.bullets.splice(j, 1);
+
+                // フェーズ移行判定
+                const phaseThreshold = boss.maxHp * (1 - boss.phase / 3); // 200, 100
+                if (boss.hp <= phaseThreshold && boss.phase < 3) {
+                    boss.phase++;
+                    boss.invulnerable = true;
+                    boss.invulnerableTimer = 180; // 3秒
+                    addFloatingText(boss.x + boss.width / 2, boss.y, "PHASE CHANGE!", "#f1c40f", 30);
+
+                    // 強制的に上へ戻す目標設定
+                    boss.y = 50;
+                }
+            }
+        }
     }
 
     for (let i = state.viruses.length - 1; i >= 0; i--) {
@@ -524,7 +813,12 @@ function updateGame(timestamp) {
                 state.hp -= 10;
                 addFloatingText(state.player.x + state.player.width / 2, state.player.y, "-10 HP", "red", 30);
             } else {
-                state.activeDebuffs.push({ multiplier: v.isStrong ? 0.5 : 0.8, endTime: timestamp + 3000 });
+                // 攻撃低下無効ブーストチェック
+                if (state.immuneAtkDownTimer > 0) {
+                    addFloatingText(state.player.x + state.player.width / 2, state.player.y, "BLOCK!", "#ffd700", 20);
+                } else {
+                    state.activeDebuffs.push({ multiplier: v.isStrong ? 0.5 : 0.8, endTime: timestamp + 3000 });
+                }
             }
             state.viruses.splice(i, 1);
             state.comboCount = 0;
@@ -559,7 +853,9 @@ function updateGame(timestamp) {
                 addFloatingText(v.x + v.width / 2, v.y, `-${b.damage}`, '#ff4757', 18);
                 if (v.hp <= 0) {
                     state.comboCount++;
-                    state.virusTotal += state.comboCount;
+                    // α種なら固定5個、通常種ならコンボ数加算
+                    const virusGain = v.isStrong ? 5 : state.comboCount;
+                    state.virusTotal += virusGain;
                     if (state.isMapMode) state.mapKills++;
                     state.killCountInSession++;
                     createSparks(v.x + v.width / 2, v.y + v.height / 2, '#f1c40f');
@@ -572,7 +868,7 @@ function updateGame(timestamp) {
                 break;
             }
         }
-    }
+    } // This '}' was the problematic one. It closed the for loop, but the code after it was still intended for updateGame.
 
     if (state.mapFadeTimer > 0) state.mapFadeTimer--;
 
@@ -587,33 +883,78 @@ function updateGame(timestamp) {
         if (p.life <= 0) state.particles.splice(i, 1);
     }
     spawnVirus(timestamp);
-}
+
+    // ブーストタイマー更新 (60fps想定で1/60ずつ減算)
+    if (state.immuneAtkDownTimer > 0) state.immuneAtkDownTimer = Math.max(0, state.immuneAtkDownTimer - 1 / 60);
+    if (state.doubleAtkTimer > 0) state.doubleAtkTimer = Math.max(0, state.doubleAtkTimer - 1 / 60);
+
+    if (state.activeTab === 'game-tab') updateBoostIndicators();
+} // This '}' now correctly closes the updateGame function.
 
 function checkGameState() {
     if (!state.isMapMode) return;
+
+    // 敗北判定
     if (state.hp <= 0) {
         alert("敗北しました...\n通常モードに戻ります。");
         state.isMapMode = false;
         state.hp = state.maxHp;
         updateUI();
-    } else if (state.mapKills >= state.mapQuota) {
-        showRewardScreen();
+        return;
+    }
+
+    // 勝利判定
+    // ボス戦の場合は、ここでのノルマ判定を行わない (updateBoss関数でのみ勝利判定)
+    if (!state.currentStageId.endsWith('boss')) {
+        if (state.mapKills >= state.mapQuota) {
+            showRewardScreen();
+        }
     }
 }
 
 function showRewardScreen() {
     state.isMapMode = false;
     state.lastClearedStage = state.currentStageId;
+    if (!state.clearedStages.includes(state.currentStageId)) {
+        state.clearedStages.push(state.currentStageId);
+    }
     checkStageUnlocks();
 
+    // クリア回数の更新
+    if (!state.stageClearCounts[state.currentStageId]) {
+        state.stageClearCounts[state.currentStageId] = 0;
+    }
+    state.stageClearCounts[state.currentStageId]++;
+
+    const clearCount = state.stageClearCounts[state.currentStageId];
+    // 減衰率: (クリア回数 - 1) * 5%. 初回(1回目)は0%減、2回目は5%減...
+    let decayRate = (clearCount - 1) * 0.05;
+    decayRate = Math.min(0.9, decayRate); // 最大90%減まで（一応の下限）
+    const multiplier = Math.max(0.1, 1.0 - decayRate);
+
+    // 基本報酬
+    let baseVirus = 20 + Math.floor(Math.random() * 10);
+    let baseFragments = 1 + Math.floor(Math.random() * 2);
+    let baseMoney = 100 + Math.floor(Math.random() * 50);
+
+    // マップ2の報酬補正 (1.1倍)
+    if (state.currentStageId.startsWith('map2')) {
+        const map2Multiplier = 1.1;
+        baseVirus *= map2Multiplier;
+        baseFragments *= map2Multiplier;
+        baseMoney *= map2Multiplier;
+    }
+
     const rewards = {
-        virus: 20 + Math.floor(Math.random() * 10),
-        fragments: 1 + Math.floor(Math.random() * 2),
-        money: 100 + Math.floor(Math.random() * 50)
+        virus: Math.floor(baseVirus * multiplier),
+        fragments: Math.floor(baseFragments * multiplier),
+        money: Math.floor(baseMoney * multiplier)
     };
 
     // UI Reset
     document.querySelectorAll('.reward-item').forEach(item => item.classList.remove('show'));
+    const unlockMsg = document.getElementById('reward-unlock-msg');
+    if (unlockMsg) unlockMsg.classList.remove('show');
     document.getElementById('reward-close-btn').classList.add('hidden');
 
     switchTab('reward-tab');
@@ -638,6 +979,23 @@ function showRewardScreen() {
         mItem.querySelector('.reward-value').innerText = `+${rewards.money}`;
         mItem.classList.add('show');
         state.money += rewards.money;
+
+        // 1-3クリア時演出
+        if (state.currentStageId === 'map1-3') {
+            const msg = document.getElementById('reward-unlock-msg');
+            if (msg) {
+                msg.innerText = "⚠️ BOSS STAGE UNLOCKED! ⚠️";
+                setTimeout(() => msg.classList.add('show'), 500);
+            }
+        }
+        // マップ2解放演出 (1-BOSSクリア時)
+        if (state.currentStageId === 'map1-boss') {
+            const msg = document.getElementById('reward-unlock-msg');
+            if (msg) {
+                msg.innerText = "⚠️ MAP 2 UNLOCKED! ⚠️";
+                setTimeout(() => msg.classList.add('show'), 500);
+            }
+        }
     }, 1900);
 
     setTimeout(() => {
@@ -665,12 +1023,6 @@ function processResearch(timestamp) {
             state.researchProgress++;
             state.virusTotal--;
             state.antibodyPoints++;
-
-            // 10個研究するごとに治療薬を1つ生成
-            if (state.researchProgress % 10 === 0) {
-                state.medicine++;
-                addFloatingText(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2, "治療薬 +1", "#e67e22", 24);
-            }
             updateUI();
         } else {
             state.isResearching = false; state.researchTarget = 0; state.researchProgress = 0; updateUI();
@@ -798,6 +1150,47 @@ function draw() {
             ctx.fillText(state.currentStageName, SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2);
             ctx.restore();
         }
+
+        // ボス描画
+        if ((state.currentStageId === 'map1-boss' || state.currentStageId === 'map2-boss') && state.boss) {
+            const boss = state.boss;
+            ctx.save();
+            // 無敵中は点滅
+            if (boss.invulnerable && Math.floor(Date.now() / 100) % 2 === 0) {
+                ctx.globalAlpha = 0.5;
+            }
+            // 3倍サイズで描画 (assets.virusを使用)
+            ctx.filter = 'hue-rotate(280deg) saturate(3)'; // 紫色のボス
+            ctx.drawImage(assets.virus, boss.x, boss.y, boss.width, boss.height);
+            ctx.restore();
+
+            // ボス弾描画
+            ctx.fillStyle = '#e74c3c';
+            for (const b of boss.bullets) {
+                ctx.beginPath();
+                ctx.arc(b.x + b.width / 2, b.y + b.height / 2, b.width / 2, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // ボスHPバー (画面上部)
+            const bossBarW = SCREEN_WIDTH - 40;
+            const bossBarH = 25;
+            const bx = 20;
+            const by = 80; // マップ名表示の下あたり
+
+            ctx.fillStyle = '#333';
+            ctx.fillRect(bx, by, bossBarW, bossBarH);
+            ctx.fillStyle = '#e74c3c';
+            ctx.fillRect(bx, by, bossBarW * (boss.hp / boss.maxHp), bossBarH);
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(bx, by, bossBarW, bossBarH);
+
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 16px "Inter", sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(`BOSS 1 (PHASE ${boss.phase})`, SCREEN_WIDTH / 2, by - 5);
+        }
     }
 }
 
@@ -825,6 +1218,8 @@ function saveGame() {
         maxHp: state.maxHp,
         unlockedStages: state.unlockedStages,
         lastClearedStage: state.lastClearedStage,
+        clearedStages: state.clearedStages,
+        stageClearCounts: state.stageClearCounts,
         purifyTargetPoints: state.purifyTargetPoints
     };
     localStorage.setItem("virusShooterSave", JSON.stringify(saveData));
@@ -838,7 +1233,21 @@ function loadGame() {
         Object.keys(data).forEach(key => {
             if (key in state) state[key] = data[key];
         });
+
+        // 移行用: 古いlastClearedStageがあればclearedStagesに追加
+        if (state.lastClearedStage && !state.clearedStages.includes(state.lastClearedStage)) {
+            state.clearedStages.push(state.lastClearedStage);
+
+            // 下位のステージもクリア済みとみなす簡易補正（必要に応じて）
+            const stages = ['map1-1', 'map1-2', 'map1-3', 'map1-boss'];
+            const idx = stages.indexOf(state.lastClearedStage);
+            for (let i = 0; i < idx; i++) {
+                if (!state.clearedStages.includes(stages[i])) state.clearedStages.push(stages[i]);
+            }
+        }
+
         state.hp = state.maxHp;
+        checkStageUnlocks(); // Fix: ロード時にステージ解放判定を行う
         updateUI();
     } catch (e) {
         console.error("Failed to load save data", e);

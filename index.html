@@ -6,7 +6,7 @@
     <meta name="viewport"
         content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Virus Shooter</title>
-    <link rel="stylesheet" href="style.css?v=1.2">
+    <link rel="stylesheet" href="style.css?v=1.3">
 </head>
 
 <body>
@@ -65,13 +65,57 @@
                         <div class="map-category-header" onclick="toggleMapDetails('map1-details')">
                             マップ① <span class="arrow">▼</span>
                         </div>
-                        <div id="map1-details" class="map-details">
-                            <button class="stage-btn" data-stage="map1-1" onclick="startMap('map1-1', 15)">マップ①ー① (ノルマ:
-                                15)</button>
-                            <button class="stage-btn" data-stage="map1-2" onclick="startMap('map1-2', 30)">マップ①ー② (ノルマ:
-                                30)</button>
-                            <button class="stage-btn" data-stage="map1-3" onclick="startMap('map1-3', 50)">マップ①ー③ (ノルマ:
-                                50)</button>
+                        <div id="map1-details" class="map-details" style="display: block;"> <!-- デフォルト展開 -->
+                            <div class="stage-list">
+                                <button class="stage-btn" data-stage="map1-1" onclick="startMap('map1-1', 10)">
+                                    <span class="stage-name">マップ 1-1</span>
+                                    <span class="stage-quota">ノルマ: 10体</span>
+                                </button>
+                                <button class="stage-btn" data-stage="map1-2" onclick="startMap('map1-2', 20)" disabled>
+                                    <span class="stage-name">マップ 1-2</span>
+                                    <span class="stage-quota">ノルマ: 20体</span>
+                                </button>
+                                <button class="stage-btn" data-stage="map1-3" onclick="startMap('map1-3', 30)" disabled>
+                                    <span class="stage-name">マップ 1-3</span>
+                                    <span class="stage-quota">ノルマ: 30体</span>
+                                </button>
+                                <!-- ボスステージ -->
+                                <button class="stage-btn boss-stage-btn" data-stage="map1-boss"
+                                    onclick="startMap('map1-boss', 1)" disabled
+                                    style="border-color: #e74c3c; background: rgba(231, 76, 60, 0.1);">
+                                    <span class="stage-name" style="color: #e74c3c;">💀 1-BOSS</span>
+                                    <span class="stage-quota">勝利条件: ボス撃破</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="map-category">
+                        <div class="map-category-header" onclick="toggleMapDetails('map2-details')">
+                            マップ② <span class="arrow">▼</span>
+                        </div>
+                        <div id="map2-details" class="map-details" style="display: none;">
+                            <div class="stage-list">
+                                <button class="stage-btn" data-stage="map2-1" onclick="startMap('map2-1', 15)" disabled>
+                                    <span class="stage-name">マップ 2-1</span>
+                                    <span class="stage-quota">ノルマ: 15体</span>
+                                </button>
+                                <button class="stage-btn" data-stage="map2-2" onclick="startMap('map2-2', 30)" disabled>
+                                    <span class="stage-name">マップ 2-2</span>
+                                    <span class="stage-quota">ノルマ: 30体</span>
+                                </button>
+                                <button class="stage-btn" data-stage="map2-3" onclick="startMap('map2-3', 50)" disabled>
+                                    <span class="stage-name">マップ 2-3</span>
+                                    <span class="stage-quota">ノルマ: 50体</span>
+                                </button>
+                                <!-- ボスステージ -->
+                                <button class="stage-btn boss-stage-btn" data-stage="map2-boss"
+                                    onclick="startMap('map2-boss', 1)" disabled
+                                    style="border-color: #e74c3c; background: rgba(231, 76, 60, 0.1);">
+                                    <span class="stage-name" style="color: #e74c3c;">💀 2-BOSS</span>
+                                    <span class="stage-quota">勝利条件: ボス撃破</span>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -123,6 +167,11 @@
                                 <span class="reward-label">お金:</span>
                                 <span class="reward-value">+0</span>
                             </div>
+
+                            <div id="reward-unlock-msg" class="hidden">
+                                ⚠️ BOSS STAGE UNLOCKED! ⚠️
+                            </div>
+
                         </div>
                         <button id="reward-close-btn" class="hidden">次へ</button>
                     </div>
@@ -234,6 +283,50 @@
                     <p class="treatment-note">治療薬を 1 個消費して人々を治療し、お金を獲得します</p>
                 </div>
             </div>
+
+            <!-- お金タブ (新規) -->
+            <div id="money-tab" class="tab-content">
+                <h2>ショップ・交換所</h2>
+                <div class="shop-hud">
+                    <span class="shop-hud-label">現在の所持金:</span>
+                    <span id="shop-money-display" class="shop-hud-value">0</span><span class="shop-hud-unit">円</span>
+                </div>
+
+                <div class="shop-scroll-container">
+                    <section class="shop-section">
+                        <h3><span class="shop-icon">⚡</span> 一時ブースト</h3>
+                        <div class="boost-list">
+                            <div class="boost-item">
+                                <div class="boost-info">
+                                    <span class="boost-name">攻撃低下無効</span>
+                                    <span class="boost-desc">60秒間、ウイルス接触時の攻撃力低下を無効化します。</span>
+                                </div>
+                                <button id="btn-buy-immune" class="buy-btn">500円で購入</button>
+                            </div>
+                            <div class="boost-item">
+                                <div class="boost-info">
+                                    <span class="boost-name">攻撃力3倍</span>
+                                    <span class="boost-desc">60秒間、すべての攻撃力が3倍になります。</span>
+                                </div>
+                                <button id="btn-buy-double" class="buy-btn">500円で購入</button>
+                            </div>
+                        </div>
+                    </section>
+
+                    <div class="lab-divider"></div>
+
+                    <section class="shop-section">
+                        <h3><span class="shop-icon">🔄</span> 素材交換</h3>
+                        <div class="exchange-item">
+                            <div class="exchange-info">
+                                <span class="boost-name">欠片の購入</span>
+                                <span class="boost-desc">お金を欠片に交換します。 (レート 100円 : 1個)</span>
+                            </div>
+                            <button id="btn-exchange-fragment" class="buy-btn">100円で交換</button>
+                        </div>
+                    </section>
+                </div>
+            </div>
         </div>
 
         <!-- タブナビゲーション -->
@@ -254,6 +347,10 @@
                 <span class="tab-icon">⚡</span>
                 <span class="tab-text">強化</span>
             </button>
+            <button class="tab-btn" data-tab="money-tab">
+                <span class="tab-icon">💰</span>
+                <span class="tab-text">お金</span>
+            </button>
             <button class="tab-btn" data-tab="research-tab">
                 <span class="tab-icon">🧪</span>
                 <span class="tab-text">研究</span>
@@ -264,7 +361,7 @@
             </button>
         </nav>
     </div>
-    <script src="game.js?v=1.2"></script>
+    <script src="game.js?v=1.4"></script>
 </body>
 
 </html>
