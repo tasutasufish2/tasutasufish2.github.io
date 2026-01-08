@@ -21,6 +21,13 @@ const researchTargetDisplay = document.getElementById('research-target-count');
 const progressBar = document.getElementById('research-progress-bar');
 const labBtn = document.getElementById('research-lab');
 
+const purifyProgressBar = document.getElementById('purify-progress-bar');
+const purifyLabBtn = document.getElementById('purify-lab');
+const btnPurifyStart = document.getElementById('btn-purify-start');
+const purifyTargetDisplay = document.getElementById('purify-target-count');
+const purifyTotalPointsDisplay = document.getElementById('purify-total-points');
+const purifyTotalTimeDisplay = document.getElementById('purify-total-time-display');
+
 const statAtkDisplay = document.getElementById('stat-atk');
 const statHpDisplay = document.getElementById('stat-hp');
 const statMoneyDisplay = document.getElementById('stat-money');
@@ -28,6 +35,12 @@ const statFragmentsDisplay = document.getElementById('stat-fragments');
 
 const statMoneyHudDisplay = document.getElementById('stat-money-hud');
 const statFragmentsHudDisplay = document.getElementById('stat-fragments-hud');
+
+const medicineCountDisplay = document.getElementById('medicine-count');
+const treatmentMoneyDisplay = document.getElementById('treatment-money');
+const btnTreat = document.getElementById('btn-treat');
+const hospitalImg = document.getElementById('hospital-img');
+const treatmentEffectContainer = document.getElementById('treatment-effect-container');
 
 // Game Settings
 const SCREEN_WIDTH = 400;
@@ -57,6 +70,8 @@ let state = {
     antibodyPoints: 0,
     money: 0,
     fragments: 0,
+    medicine: 0,
+    medicinePlus: 0,
 
     atkLv: 1,
     sizeLv: 1,
@@ -67,6 +82,13 @@ let state = {
     researchTarget: 0,
     isResearching: false,
     researchProgress: 0,
+
+    isPurifying: false,
+    purifyProgress: 0,
+    purifyTargetPoints: 30, // プレイヤーが設定した投入量
+    purifyTotalTimeSteps: 30 * 60, // 実際の精製時間 (ステップ数)
+    purifyCostPerMedicine: 30, // 薬1つあたりのコスト
+    purifyTimePerMedicine: 30, // 薬1つあたりの時間 (秒)
 
     comboCount: 0,
     comboEffects: [],
@@ -131,6 +153,26 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
         switchTab(target);
     });
 });
+
+// --- Mobile Controls ---
+const btnMoveLeft = document.getElementById('btn-move-left');
+const btnMoveRight = document.getElementById('btn-move-right');
+
+if (btnMoveLeft) {
+    const startLeft = (e) => { e.preventDefault(); keys.ArrowLeft = true; };
+    const endLeft = (e) => { e.preventDefault(); keys.ArrowLeft = false; };
+    btnMoveLeft.addEventListener('pointerdown', startLeft);
+    btnMoveLeft.addEventListener('pointerup', endLeft);
+    btnMoveLeft.addEventListener('pointerleave', endLeft);
+}
+
+if (btnMoveRight) {
+    const startRight = (e) => { e.preventDefault(); keys.ArrowRight = true; };
+    const endRight = (e) => { e.preventDefault(); keys.ArrowRight = false; };
+    btnMoveRight.addEventListener('pointerdown', startRight);
+    btnMoveRight.addEventListener('pointerup', endRight);
+    btnMoveRight.addEventListener('pointerleave', endRight);
+}
 
 window.toggleMapDetails = function (id) {
     const el = document.getElementById(id);
@@ -231,12 +273,35 @@ function updateUI() {
     }
     researchTargetDisplay.innerText = state.researchTarget;
 
+    // 精製UI更新
+    if (state.isPurifying) {
+        const percent = (state.purifyProgress / state.purifyTotalTimeSteps) * 100;
+        purifyProgressBar.style.width = `${percent}%`;
+        purifyLabBtn.classList.add('researching');
+        btnPurifyStart.disabled = true;
+        btnPurifyStart.innerText = '精製中...';
+    } else {
+        purifyProgressBar.style.width = '0%';
+        purifyLabBtn.classList.remove('researching');
+        btnPurifyStart.disabled = state.antibodyPoints < state.purifyTargetPoints || state.purifyTargetPoints <= 0;
+        btnPurifyStart.innerText = '精製開始';
+    }
+    if (purifyTargetDisplay) purifyTargetDisplay.innerText = state.purifyTargetPoints;
+    if (purifyTotalPointsDisplay) purifyTotalPointsDisplay.innerText = state.purifyTargetPoints;
+    if (purifyTotalTimeDisplay) purifyTotalTimeDisplay.innerText = Math.ceil(state.purifyTargetPoints / state.purifyCostPerMedicine * state.purifyTimePerMedicine);
+
     document.getElementById('open-map-btn').style.display = state.isMapMode ? 'none' : 'block';
+
+    // 治療タブ更新
+    if (medicineCountDisplay) medicineCountDisplay.innerText = state.medicine;
+    if (treatmentMoneyDisplay) treatmentMoneyDisplay.innerText = state.money;
+    if (btnTreat) btnTreat.disabled = state.medicine <= 0;
 }
 
 document.getElementById('reset-button').addEventListener('click', () => {
     if (confirm('リセットしますか？')) {
         state.virusTotal = 0; state.antibodyPoints = 0; state.money = 0; state.fragments = 0;
+        state.medicine = 0; state.medicinePlus = 0;
         state.atkLv = 1; state.sizeLv = 1; state.hpLv = 1; state.resLv = 1; state.alphaLv = 0;
         state.maxHp = 50; state.hp = 50;
         state.isResearching = false; state.isMapMode = false;
@@ -294,6 +359,43 @@ labBtn.onclick = () => {
         updateUI();
     }
 };
+
+window.startPurification = function () {
+    if (!state.isPurifying && state.purifyTargetPoints >= state.purifyCostPerMedicine && state.antibodyPoints >= state.purifyTargetPoints) {
+        state.antibodyPoints -= state.purifyTargetPoints;
+        state.isPurifying = true;
+        state.purifyProgress = 0;
+        // 時間を計算 (30ptごとに30秒)
+        const totalSeconds = (state.purifyTargetPoints / state.purifyCostPerMedicine) * state.purifyTimePerMedicine;
+        state.purifyTotalTimeSteps = totalSeconds * 60;
+        updateUI();
+    }
+};
+
+function adjustPurifyTarget(amount) {
+    if (state.isPurifying) return;
+    // 30の倍数で調整
+    let change = amount;
+    if (Math.abs(amount) === 1) change = amount * 30;
+    else if (Math.abs(amount) === 10) change = amount / 10 * 300;
+    else if (Math.abs(amount) === 100) change = amount / 100 * 3000;
+
+    state.purifyTargetPoints = Math.max(30, state.purifyTargetPoints + change);
+    // 30の倍数に丸める
+    state.purifyTargetPoints = Math.floor(state.purifyTargetPoints / 30) * 30;
+    if (state.purifyTargetPoints < 30) state.purifyTargetPoints = 30;
+    updateUI();
+}
+
+if (btnPurifyStart) btnPurifyStart.onclick = window.startPurification;
+if (purifyLabBtn) purifyLabBtn.onclick = window.startPurification;
+
+document.getElementById('btn-purify-plus').onclick = () => adjustPurifyTarget(1);
+document.getElementById('btn-purify-minus').onclick = () => adjustPurifyTarget(-1);
+document.getElementById('btn-purify-plus-10').onclick = () => adjustPurifyTarget(10);
+document.getElementById('btn-purify-minus-10').onclick = () => adjustPurifyTarget(-10);
+document.getElementById('btn-purify-plus-100').onclick = () => adjustPurifyTarget(100);
+document.getElementById('btn-purify-minus-100').onclick = () => adjustPurifyTarget(-100);
 
 // --- Game Logic ---
 
@@ -520,13 +622,69 @@ function processResearch(timestamp) {
     const interval = 500 / Math.pow(2, state.resLv - 1);
     if (timestamp - lastResearchTime > interval) {
         if (state.researchProgress < state.researchTarget && state.virusTotal >= 1) {
-            state.researchProgress++; state.virusTotal--; state.antibodyPoints++; updateUI();
+            state.researchProgress++;
+            state.virusTotal--;
+            state.antibodyPoints++;
+
+            // 10個研究するごとに治療薬を1つ生成
+            if (state.researchProgress % 10 === 0) {
+                state.medicine++;
+                addFloatingText(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2, "治療薬 +1", "#e67e22", 24);
+            }
+            updateUI();
         } else {
             state.isResearching = false; state.researchTarget = 0; state.researchProgress = 0; updateUI();
         }
         lastResearchTime = timestamp;
     }
 }
+
+function processPurification() {
+    if (!state.isPurifying) return;
+
+    state.purifyProgress++;
+    if (state.purifyProgress >= state.purifyTotalTimeSteps) {
+        state.isPurifying = false;
+        const medicineGained = Math.floor(state.purifyTargetPoints / state.purifyCostPerMedicine);
+        state.purifyProgress = 0;
+        state.medicine += medicineGained;
+        addFloatingText(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2, `精製完了！ 治療薬 +${medicineGained}`, "#f1c40f", 28);
+        updateUI();
+    }
+    // 進捗バーは毎フレーム更新されるため updateUI を頻繁に呼ぶ必要はないが
+    // 1秒ごと程度に更新するか、描画ループでバーを描画する方式が効率的。
+    // ここでは簡略化のため描画のタイミングで進捗を反映させる。
+}
+
+function treatPatient() {
+    if (state.medicine <= 0) return;
+
+    state.medicine--;
+    const reward = 100 + Math.floor(Math.random() * 101); // 100〜200円
+    state.money += reward;
+
+    // 演出
+    if (hospitalImg) {
+        hospitalImg.classList.remove('shake');
+        void hospitalImg.offsetWidth; // reflow
+        hospitalImg.classList.add('shake');
+    }
+
+    // お金ポップアップ
+    const popup = document.createElement('div');
+    popup.className = 'money-popup';
+    popup.innerText = `+${reward}円`;
+    treatmentEffectContainer.appendChild(popup);
+    setTimeout(() => popup.remove(), 1000);
+
+    // スパーク演出 (既存の関数を利用)
+    const rect = hospitalImg.getBoundingClientRect();
+    createSparks(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2, "#f1c40f");
+
+    updateUI();
+}
+
+if (btnTreat) btnTreat.onclick = treatPatient;
 
 function draw() {
     ctx.clearRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
@@ -575,7 +733,7 @@ function draw() {
         const hpBarW = 300;
         const hpBarH = 20;
         const hpX = (SCREEN_WIDTH - hpBarW) / 2;
-        const hpY = SCREEN_HEIGHT - 40;
+        const hpY = SCREEN_HEIGHT - 25; // さらに下げる (以前は -40)
         const hpRatio = state.hp / state.maxHp;
         ctx.fillStyle = '#222'; ctx.fillRect(hpX, hpY, hpBarW, hpBarH);
 
@@ -606,6 +764,7 @@ function draw() {
 function gameLoop(timestamp) {
     updateGame(timestamp);
     processResearch(timestamp);
+    processPurification();
     if (state.activeTab === 'game-tab') draw();
     requestAnimationFrame(gameLoop);
 }
