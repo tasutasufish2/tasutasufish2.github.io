@@ -157,6 +157,8 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 // --- Mobile Controls ---
 const btnMoveLeft = document.getElementById('btn-move-left');
 const btnMoveRight = document.getElementById('btn-move-right');
+const btnFireLeft = document.getElementById('btn-fire-left');
+const btnFireRight = document.getElementById('btn-fire-right');
 
 if (btnMoveLeft) {
     const startLeft = (e) => { e.preventDefault(); keys.ArrowLeft = true; };
@@ -172,6 +174,21 @@ if (btnMoveRight) {
     btnMoveRight.addEventListener('pointerdown', startRight);
     btnMoveRight.addEventListener('pointerup', endRight);
     btnMoveRight.addEventListener('pointerleave', endRight);
+}
+
+const startFire = (e) => { e.preventDefault(); keys.Space = true; };
+const endFire = (e) => { e.preventDefault(); keys.Space = false; };
+
+if (btnFireLeft) {
+    btnFireLeft.addEventListener('pointerdown', startFire);
+    btnFireLeft.addEventListener('pointerup', endFire);
+    btnFireLeft.addEventListener('pointerleave', endFire);
+}
+
+if (btnFireRight) {
+    btnFireRight.addEventListener('pointerdown', startFire);
+    btnFireRight.addEventListener('pointerup', endFire);
+    btnFireRight.addEventListener('pointerleave', endFire);
 }
 
 window.toggleMapDetails = function (id) {

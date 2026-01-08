@@ -129,12 +129,14 @@ body {
 #mobile-controls {
     display: flex;
     justify-content: center;
-    gap: 40px;
+    align-items: center;
+    gap: 20px;
     padding: 10px 0;
     width: 100%;
 }
 
-.move-btn {
+.move-btn,
+.fire-btn {
     width: 60px;
     height: 60px;
     cursor: pointer;
@@ -146,7 +148,8 @@ body {
     touch-action: none;
 }
 
-.move-btn img {
+.move-btn img,
+.fire-btn img {
     width: 100%;
     height: 100%;
     object-fit: contain;
@@ -154,7 +157,14 @@ body {
     -webkit-user-drag: none;
 }
 
-.move-btn:active {
+.fire-btn {
+    width: 70px;
+    /* 発射ボタンは少し大きく */
+    height: 70px;
+}
+
+.move-btn:active,
+.fire-btn:active {
     transform: scale(0.9);
 }
 
@@ -945,13 +955,18 @@ body {
 
     #mobile-controls {
         padding: 5px 0;
-        gap: 30px;
+        gap: 10px;
         flex-shrink: 0;
     }
 
     .move-btn {
-        width: 50px;
-        height: 50px;
+        width: 45px;
+        height: 45px;
+    }
+
+    .fire-btn {
+        width: 55px;
+        height: 55px;
     }
 
     /* game-containerとgameCanvasは親のflex設定に従う */
