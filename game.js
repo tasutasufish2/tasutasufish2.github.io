@@ -63,6 +63,15 @@ function startGame() { gameStarted = true; requestAnimationFrame(gameLoop); }
 setTimeout(() => { if (!gameStarted) startGame(); }, 3000);
 Object.values(assets).forEach(img => { img.onload = onAssetLoad; img.onerror = onAssetLoad; });
 
+// Skill Data Definition
+const SKILL_DATA = {
+    start: { name: "起点", desc: "全ての始まり。", cost: 0 },
+    attackBloom: { name: "攻撃開花", desc: "攻撃系スキルツリーを解放します。\n更なる火力を求める者へ。", cost: 50 },
+    hpBloom: { name: "体力開花", desc: "体力系スキルツリーを解放します。\n生存能力を高めたい者へ。", cost: 50 },
+    specialBloom: { name: "特殊開花", desc: "特殊系スキルツリーを解放します。\n異能の力を求める者へ。", cost: 50 }
+};
+
+
 // --- Game State ---
 let state = {
     activeTab: 'game-tab',
@@ -130,7 +139,27 @@ let state = {
     viruses: [],
     lastVirusSpawn: 0,
     spawnInterval: 1000,
-    killCountInSession: 0
+    killCountInSession: 0,
+
+    // Skill Tree
+    skills: {
+        attackBloom: false,
+        hpBloom: false,
+        specialBloom: false
+    },
+
+    // System
+    paused: false,
+
+    // Skill Tree UI State
+    skillTree: {
+        offsetX: 0,
+        offsetY: 0,
+        scale: 1.0,
+        isDragging: false,
+        lastX: 0,
+        lastY: 0
+    }
 };
 
 // --- Input ---
@@ -268,7 +297,13 @@ window.startMap = function (id, quota) {
             invulnerableTimer: 0,
             actionTimer: 0,
             bullets: [],
-            targetY: 50
+            targetY: 50,
+            // 特殊攻撃ステート
+            attackState: 'idle', // idle, warning, firing, cooldown
+            attackTimer: 0,
+            attackTargetX: 0,
+            attackWidth: 0,
+            hasHitPlayer: false
         };
         state.mapQuota = 1;
     } else {
@@ -473,6 +508,11 @@ document.getElementById('reset-button').addEventListener('click', () => {
         state.viruses = []; state.bullets = []; state.comboCount = 0;
         state.unlockedStages = ['map1-1'];
         state.lastClearedStage = null;
+        state.clearedStages = [];
+        state.clearedStages = [];
+        state.stageClearCounts = {};
+        state.skills = { attackBloom: false, hpBloom: false, specialBloom: false };
+        state.paused = false;
 
         localStorage.removeItem("virusShooterSave");
         updateUI();
@@ -497,7 +537,297 @@ document.getElementById('upgrade-hp').onclick = () => {
         updateUI();
         saveGame();
     }
+}
+
+// --- Skill Tree Logic ---
+// --- Skill Tree Logic ---
+function updateSkillTreeUI() {
+    // Fragment Display
+    const fragDisplay = document.getElementById('skill-fragment-display');
+    if (fragDisplay) fragDisplay.innerText = state.fragments;
+
+    // Nodes
+    const nodes = {
+        start: document.querySelector('.skill-node[data-skill="start"]'), // Add start
+        attackBloom: document.querySelector('.skill-node[data-skill="attackBloom"]'),
+        hpBloom: document.querySelector('.skill-node[data-skill="hpBloom"]'),
+        specialBloom: document.querySelector('.skill-node[data-skill="specialBloom"]'),
+    };
+
+    // Check if start node is logically acquired (always yes)
+    const canUnlock = state.fragments >= 50;
+
+    for (const [key, el] of Object.entries(nodes)) {
+        if (!el) continue;
+
+        // Remove old listeners (clone node trick is rough but simple, or just re-assign)
+        // For simplicity in this structure, we'll just set properties mostly, but event listeners stack.
+        // Let's replace the element to clear listeners if needed, or just be careful.
+        // Given the constraints, we will just overwrite onclick and add mouse events carefully.
+
+        const data = SKILL_DATA[key];
+
+        // Tooltip Events
+        el.onmouseenter = (e) => showTooltip(e, data);
+        el.onmousemove = (e) => moveTooltip(e);
+        el.onmouseleave = (e) => hideTooltip();
+        // Mobile touch support for tooltip (tap to show, second tap to act?)
+        // For now, simple touchstart to show tooltip
+        el.ontouchstart = (e) => {
+            showTooltip(e.touches[0], data);
+            // e.preventDefault(); // Might block click
+        };
+
+        // Reset classes
+        el.classList.remove('locked', 'available', 'acquired');
+
+        if (key === 'start' || state.skills[key]) {
+            el.classList.add('acquired');
+            el.onclick = null;
+        } else {
+            if (canUnlock) {
+                el.classList.add('available');
+                el.onclick = () => unlockSkill(key, data);
+            } else {
+                el.classList.add('locked');
+                el.onclick = () => { /* No action or shake effect */ };
+            }
+        }
+    }
+}
+
+// Tooltip Functions
+function showTooltip(e, data) {
+    const tooltip = document.getElementById('skill-tooltip');
+    if (!tooltip) return;
+
+    document.getElementById('tooltip-title').innerText = data.name;
+    document.getElementById('tooltip-desc').innerText = data.desc;
+    const costElem = document.getElementById('tooltip-cost');
+
+    if (data.cost > 0) {
+        costElem.style.display = 'block';
+        costElem.innerText = `必要欠片: ${data.cost}`;
+    } else {
+        costElem.style.display = 'none';
+    }
+
+    tooltip.classList.remove('hidden');
+    moveTooltip(e);
+}
+
+function moveTooltip(e) {
+    const tooltip = document.getElementById('skill-tooltip');
+    if (!tooltip) return;
+    // Position above cursor
+    tooltip.style.left = e.clientX + 'px';
+    tooltip.style.top = (e.clientY - 20) + 'px';
+}
+
+// --- Skill Tree Interaction (Pan & Zoom) ---
+function initSkillTreeInteraction() {
+    const viewport = document.getElementById('skill-tree-viewport');
+    const content = document.getElementById('skill-tree-content');
+
+    if (!viewport || !content) return;
+
+    // Pan (Drag)
+    viewport.addEventListener('mousedown', startDrag);
+    viewport.addEventListener('touchstart', startDrag, { passive: false });
+
+    window.addEventListener('mousemove', drag);
+    window.addEventListener('touchmove', drag, { passive: false });
+
+    window.addEventListener('mouseup', endDrag);
+    window.addEventListener('touchend', endDrag);
+
+    // Zoom (Wheel)
+    viewport.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        const zoomSpeed = 0.1;
+        if (e.deltaY < 0) {
+            state.skillTree.scale = Math.min(state.skillTree.scale + zoomSpeed, 2.0);
+        } else {
+            state.skillTree.scale = Math.max(state.skillTree.scale - zoomSpeed, 0.5);
+        }
+        updateSkillTreeTransform();
+    }, { passive: false });
+}
+
+function startDrag(e) {
+    if (state.activeTab !== 'skill-tree-tab') return;
+
+    state.skillTree.isDragging = true;
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+    state.skillTree.lastX = clientX;
+    state.skillTree.lastY = clientY;
+}
+
+function drag(e) {
+    if (!state.skillTree.isDragging) return;
+    e.preventDefault(); // Stop scroll
+
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+    const dx = clientX - state.skillTree.lastX;
+    const dy = clientY - state.skillTree.lastY;
+
+    state.skillTree.offsetX += dx;
+    state.skillTree.offsetY += dy;
+
+    state.skillTree.lastX = clientX;
+    state.skillTree.lastY = clientY;
+
+    updateSkillTreeTransform();
+}
+
+function endDrag() {
+    state.skillTree.isDragging = false;
+}
+
+function updateSkillTreeTransform() {
+    const content = document.getElementById('skill-tree-content');
+    if (content) {
+        content.style.transform = `translate(${state.skillTree.offsetX}px, ${state.skillTree.offsetY}px) scale(${state.skillTree.scale})`;
+    }
+}
+
+// Ensure init is called
+setTimeout(initSkillTreeInteraction, 1000);
+
+// --- Skill Tree UI Logic ---
+function updateSkillTreeUI() {
+    // Fragment Display
+    const fragDisplay = document.getElementById('skill-fragment-display');
+    if (fragDisplay) fragDisplay.innerText = state.fragments;
+
+    // Nodes
+    const nodes = {
+        start: document.querySelector('.skill-node[data-skill="start"]'),
+        attackBloom: document.querySelector('.skill-node[data-skill="attackBloom"]'),
+        hpBloom: document.querySelector('.skill-node[data-skill="hpBloom"]'),
+        specialBloom: document.querySelector('.skill-node[data-skill="specialBloom"]'),
+    };
+
+    const canUnlock = state.fragments >= 50;
+
+    for (const [key, el] of Object.entries(nodes)) {
+        if (!el) continue;
+
+        const data = SKILL_DATA[key];
+
+        // Tooltip Events
+        el.onmouseenter = (e) => showTooltip(e, data);
+        el.onmousemove = (e) => moveTooltip(e);
+        el.onmouseleave = (e) => hideTooltip();
+        el.ontouchstart = (e) => {
+            showTooltip(e.touches[0], data);
+        };
+
+        // Reset classes
+        el.classList.remove('locked', 'available', 'acquired');
+
+        if (key === 'start' || state.skills[key]) {
+            el.classList.add('acquired');
+            el.onclick = null;
+        } else {
+            if (canUnlock) {
+                el.classList.add('available');
+                el.onclick = () => unlockSkill(key, data);
+            } else {
+                el.classList.add('locked');
+                el.onclick = () => { alert("欠片が足りません (必要: 50)"); };
+            }
+        }
+    }
+}
+
+// Tooltip Functions
+function showTooltip(e, data) {
+    const tooltip = document.getElementById('skill-tooltip');
+    if (!tooltip) return;
+
+    document.getElementById('tooltip-title').innerText = data.name;
+    document.getElementById('tooltip-desc').innerText = data.desc;
+    const costElem = document.getElementById('tooltip-cost');
+
+    if (data.cost > 0) {
+        costElem.style.display = 'block';
+        costElem.innerText = `必要欠片: ${data.cost}`;
+    } else {
+        costElem.style.display = 'none';
+    }
+
+    tooltip.classList.remove('hidden');
+    moveTooltip(e);
+}
+
+function moveTooltip(e) {
+    const tooltip = document.getElementById('skill-tooltip');
+    if (!tooltip) return;
+    tooltip.style.left = e.clientX + 'px';
+    tooltip.style.top = (e.clientY - 20) + 'px';
+}
+
+
+function hideTooltip() {
+    const tooltip = document.getElementById('skill-tooltip');
+    if (tooltip) tooltip.classList.add('hidden');
+}
+
+// Hook updateSkillTreeUI into updateUI
+const originalUpdateUI = updateUI;
+updateUI = function () {
+    originalUpdateUI();
+    if (document.getElementById('skill-tree-tab').style.display !== 'none') {
+        updateSkillTreeUI();
+    }
+}
+
+function unlockSkill(skillId, data) {
+    if (state.fragments >= data.cost && !state.skills[skillId]) {
+        if (confirm(`${data.name} を開花させますか？\n(欠片 -${data.cost})`)) {
+            state.fragments -= data.cost;
+            state.skills[skillId] = true;
+            createSparks(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2, "#ffd700");
+            updateUI();
+            saveGame();
+            addFloatingText(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2, "開花！", "#fff", 40);
+        }
+    }
+}
+
+// --- Pause Logic ---
+function togglePause() {
+    state.paused = !state.paused;
+    const overlay = document.getElementById('pause-overlay');
+    if (state.paused) {
+        overlay.classList.remove('hidden');
+    } else {
+        overlay.classList.add('hidden');
+    }
+}
+
+window.addEventListener('keydown', (e) => {
+    if (e.code === 'Escape') {
+        togglePause();
+    }
+});
+
+const btnResume = document.getElementById('btn-resume');
+if (btnResume) btnResume.onclick = togglePause;
+
+const btnQuit = document.getElementById('btn-quit');
+if (btnQuit) btnQuit.onclick = () => {
+    saveGame();
+    window.close(); // ブラウザの設定によっては閉じない場合があるが、仕様通り実装
+    // 万が一閉じない場合のフォールバック（画面遷移など）は今回はしない
+    alert("セーブしました。ウィンドウを閉じて終了してください。");
 };
+;
 document.getElementById('upgrade-res').onclick = () => {
     if (state.resLv >= 5) return;
     const cost = state.resLv * 30;
@@ -604,6 +934,15 @@ function createSparks(x, y, color = null) {
     }
 }
 
+function checkCollision(rect1, rect2) {
+    return (
+        rect1.x < rect2.x + rect2.width &&
+        rect1.x + rect1.width > rect2.x &&
+        rect1.y < rect2.y + rect2.height &&
+        rect1.y + rect1.height > rect2.y
+    );
+}
+
 function addFloatingText(x, y, text, color = '#fff', size = 20) {
     state.comboEffects.push({ x, y, text, color, size, alpha: 1.0, life: 60 });
 }
@@ -650,8 +989,185 @@ function spawnVirus(timestamp) {
     }
 }
 
+function updateBoss(timestamp) {
+    const boss = state.boss;
+
+    // 勝利判定
+    if (boss.hp <= 0) {
+        state.mapKills = 1;
+        state.boss = null;
+        showRewardScreen();
+        return;
+    }
+
+    // 敗北条件：下端到達
+    if (boss.y + boss.height >= SCREEN_HEIGHT - 100) {
+        state.hp = 0;
+        checkGameState();
+        return;
+    }
+
+    // 無敵状態管理（フェーズ移行）
+    if (boss.invulnerable) {
+        boss.invulnerableTimer--;
+        if (boss.y > 50) boss.y -= 5;
+        if (boss.invulnerableTimer <= 0 && boss.y <= 50) {
+            boss.invulnerable = false;
+            if (state.currentStageId === 'map2-boss') {
+                boss.attackState = 'idle';
+                boss.attackTimer = 0;
+            }
+        }
+        return;
+    }
+
+    // --- Map 1 Boss AI ---
+    if (state.currentStageId === 'map1-boss') {
+        if (timestamp - boss.actionTimer > 500) {
+            const action = Math.random();
+            if (action < 0.4) {
+                const moveX = (Math.random() - 0.5) * 60;
+                boss.x = Math.max(0, Math.min(SCREEN_WIDTH - boss.width, boss.x + moveX));
+                boss.y += 3;
+            } else if (action < 0.8) {
+                const dx = (state.player.x + state.player.width / 2) - (boss.x + boss.width / 2);
+                const dy = (state.player.y + state.player.height / 2) - (boss.y + boss.height / 2);
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                const speed = 4;
+                boss.bullets.push({
+                    x: boss.x + boss.width / 2 - 10,
+                    y: boss.y + boss.height,
+                    vx: (dx / dist) * speed,
+                    vy: (dy / dist) * speed,
+                    width: 20,
+                    height: 20
+                });
+            }
+            boss.actionTimer = timestamp;
+        }
+    }
+    // --- Map 2 Boss AI ---
+    else if (state.currentStageId === 'map2-boss') {
+        switch (boss.attackState) {
+            case 'idle':
+                if (Math.random() < 0.1) {
+                    const moveX = (Math.random() - 0.5) * 40;
+                    boss.x = Math.max(0, Math.min(SCREEN_WIDTH - boss.width, boss.x + moveX));
+                }
+
+                if (timestamp - boss.actionTimer > 2000) {
+                    boss.actionTimer = timestamp;
+
+                    if (Math.random() < 0.5) {
+                        boss.attackState = 'warning';
+                        boss.attackTimer = 90;
+                        boss.attackTargetX = state.player.x + state.player.width / 2;
+                        const multiplier = boss.phase + 1;
+                        boss.attackWidth = state.player.width * multiplier;
+                        addFloatingText(boss.x + boss.width / 2, boss.y, "LOCK ON!", "#ff0000", 20);
+                    } else {
+                        const angles = [0, 45, 90, 135, 180, 225, 270, 315];
+                        const speed = 5;
+                        const cx = boss.x + boss.width / 2;
+                        const cy = boss.y + boss.height / 2;
+
+                        for (const angle of angles) {
+                            const rad = angle * Math.PI / 180;
+                            boss.bullets.push({
+                                x: cx - 10,
+                                y: cy - 10,
+                                vx: Math.cos(rad) * speed,
+                                vy: Math.sin(rad) * speed,
+                                width: 20,
+                                height: 20
+                            });
+                        }
+                        addFloatingText(boss.x + boss.width / 2, boss.y, "BURST!", "#ff4500", 20);
+                    }
+                }
+                break;
+
+            case 'warning':
+                boss.attackTimer--;
+                if (boss.attackTimer <= 0) {
+                    boss.attackState = 'firing';
+                    boss.attackTimer = 30;
+                }
+                break;
+
+            case 'firing':
+                boss.attackTimer--;
+                const px = state.player.x + state.player.width / 2;
+                const bx = boss.attackTargetX - boss.attackWidth / 2;
+                if (px >= bx && px <= bx + boss.attackWidth) {
+                    if (boss.attackTimer === 29) {
+                        state.hp -= 10;
+                        addFloatingText(state.player.x + state.player.width / 2, state.player.y, "-10 HP", "red", 30);
+                        checkGameState();
+                    }
+                }
+
+                if (boss.attackTimer <= 0) {
+                    boss.attackState = 'cooldown';
+                    boss.attackTimer = 60;
+                }
+                break;
+
+            case 'cooldown':
+                boss.attackTimer--;
+                if (boss.attackTimer <= 0) {
+                    boss.attackState = 'idle';
+                    boss.actionTimer = timestamp;
+                }
+                break;
+        }
+    }
+
+    // ボス弾の更新
+    for (let i = boss.bullets.length - 1; i >= 0; i--) {
+        const b = boss.bullets[i];
+        b.x += b.vx;
+        b.y += b.vy;
+
+        if (checkCollision({ x: b.x, y: b.y, width: b.width, height: b.height }, state.player)) {
+            state.hp -= 10;
+            addFloatingText(state.player.x + state.player.width / 2, state.player.y, "-10 HP", "red", 24);
+            boss.bullets.splice(i, 1);
+            checkGameState();
+            continue;
+        }
+
+        if (b.y > SCREEN_HEIGHT || b.x < 0 || b.x > SCREEN_WIDTH) {
+            boss.bullets.splice(i, 1);
+        }
+    }
+
+    // プレイヤー弾との当たり判定
+    for (let j = state.bullets.length - 1; j >= 0; j--) {
+        const b = state.bullets[j];
+        if (checkCollision({ x: boss.x, y: boss.y, width: boss.width, height: boss.height }, b)) {
+            boss.hp -= b.damage;
+            createSparks(b.x, b.y);
+            addFloatingText(boss.x + boss.width / 2, boss.y + boss.height / 2, `-${b.damage}`, "#ff4757", 20);
+            state.bullets.splice(j, 1);
+
+            const phaseThreshold = boss.maxHp * (1 - boss.phase / 3);
+            if (boss.hp <= phaseThreshold && boss.phase < 3) {
+                boss.phase++;
+                boss.invulnerable = true;
+                boss.invulnerableTimer = 180;
+                addFloatingText(boss.x + boss.width / 2, boss.y, "PHASE CHANGE!", "#f1c40f", 30);
+                boss.y = 50;
+            }
+        }
+    }
+}
+
 function updateGame(timestamp) {
     if (state.activeTab !== 'game-tab') return;
+    if (state.paused) return; // PAUSED
+
+    // ボス Logic
 
     // ボス Logic
     if (state.isMapMode && (state.currentStageId === 'map1-boss' || state.currentStageId === 'map2-boss') && state.boss) {
@@ -684,13 +1200,7 @@ function updateGame(timestamp) {
         if (state.bullets[i].y < -30) { state.bullets.splice(i, 1); state.comboCount = 0; }
     }
 
-    // ブーストタイマー更新 (60fps想定で1/60ずつ減算)
-    if (state.immuneAtkDownTimer > 0) state.immuneAtkDownTimer = Math.max(0, state.immuneAtkDownTimer - 1 / 60);
-    if (state.doubleAtkTimer > 0) state.doubleAtkTimer = Math.max(0, state.doubleAtkTimer - 1 / 60);
 
-    if (state.activeTab === 'game-tab') updateBoostIndicators();
-
-    spawnVirus(timestamp);
 
 
     function updateBoss(timestamp) {
@@ -714,40 +1224,146 @@ function updateGame(timestamp) {
         // 無敵状態管理（フェーズ移行）
         if (boss.invulnerable) {
             boss.invulnerableTimer--;
-            // 上に戻る動き
+            // 上に戻る動き (Map2ボスは攻撃中動かないので無視、あるいはリセット)
             if (boss.y > 50) boss.y -= 5;
             if (boss.invulnerableTimer <= 0 && boss.y <= 50) {
                 boss.invulnerable = false;
+                // フェーズ移行時に攻撃ステートもリセット
+                if (state.currentStageId === 'map2-boss') {
+                    boss.attackState = 'idle';
+                    boss.attackTimer = 0;
+                }
             }
             return; // 無敵中は攻撃しない
         }
 
-        // 行動AI (0.5秒ごと)
-        if (timestamp - boss.actionTimer > 500) {
-            const action = Math.random();
-            if (action < 0.4) {
-                // 移動 (左右 + 少し下へ)
-                // 移動 (左右 + 少し下へ)
-                const moveX = (Math.random() - 0.5) * 60;
-                boss.x = Math.max(0, Math.min(SCREEN_WIDTH - boss.width, boss.x + moveX));
-                boss.y += 3; // 強化: 2 -> 3 (1.5倍)
-            } else if (action < 0.8) {
-                // 弾発射 (プレイヤー狙い直線弾)
-                const dx = (state.player.x + state.player.width / 2) - (boss.x + boss.width / 2);
-                const dy = (state.player.y + state.player.height / 2) - (boss.y + boss.height / 2);
-                const dist = Math.sqrt(dx * dx + dy * dy);
-                const speed = 4;
-                boss.bullets.push({
-                    x: boss.x + boss.width / 2 - 10,
-                    y: boss.y + boss.height,
-                    vx: (dx / dist) * speed,
-                    vy: (dy / dist) * speed,
-                    width: 20,
-                    height: 20
-                });
+        // --- Map 1 Boss AI ---
+        if (state.currentStageId === 'map1-boss') {
+            if (timestamp - boss.actionTimer > 500) {
+                const action = Math.random();
+                if (action < 0.4) {
+                    // 移動 (左右 + 少し下へ)
+                    const moveX = (Math.random() - 0.5) * 60;
+                    boss.x = Math.max(0, Math.min(SCREEN_WIDTH - boss.width, boss.x + moveX));
+                    boss.y += 3; // 強化: 2 -> 3 (1.5倍)
+                } else if (action < 0.8) {
+                    // 弾発射 (プレイヤー狙い直線弾)
+                    const dx = (state.player.x + state.player.width / 2) - (boss.x + boss.width / 2);
+                    const dy = (state.player.y + state.player.height / 2) - (boss.y + boss.height / 2);
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    const speed = 4;
+                    boss.bullets.push({
+                        x: boss.x + boss.width / 2 - 10,
+                        y: boss.y + boss.height,
+                        vx: (dx / dist) * speed,
+                        vy: (dy / dist) * speed,
+                        width: 20,
+                        height: 20
+                    });
+                }
+                // 残り0.2は待機
+                boss.actionTimer = timestamp;
             }
-            // 残り0.2は待機
-            boss.actionTimer = timestamp;
+        }
+        // --- Map 2 Boss AI (Special Attack) ---
+        else if (state.currentStageId === 'map2-boss') {
+            switch (boss.attackState) {
+                case 'idle':
+                    // 通常移動 (Map1より少し大人しめ)
+                    if (Math.random() < 0.1) {
+                        const moveX = (Math.random() - 0.5) * 40;
+                        boss.x = Math.max(0, Math.min(SCREEN_WIDTH - boss.width, boss.x + moveX));
+                    }
+
+                    // 攻撃開始判定 (一定間隔)
+                    if (timestamp - boss.actionTimer > 2000) { // 2秒ごとに攻撃チャンス
+                        boss.actionTimer = timestamp;
+
+                        if (Math.random() < 0.5) {
+                            // A: ロックオンビーム
+                            boss.attackState = 'warning';
+                            boss.attackTimer = 90; // 1.5秒警告
+
+                            // ターゲット設定
+                            boss.attackTargetX = state.player.x + state.player.width / 2;
+
+                            // フェーズごとの幅: 2倍, 3倍, 4倍
+                            const multiplier = boss.phase + 1;
+                            boss.attackWidth = state.player.width * multiplier;
+
+                            addFloatingText(boss.x + boss.width / 2, boss.y, "LOCK ON!", "#ff0000", 20);
+                        } else {
+                            // B: 8方向弾発射 (New)
+                            const angles = [0, 45, 90, 135, 180, 225, 270, 315];
+                            const speed = 5;
+                            const cx = boss.x + boss.width / 2;
+                            const cy = boss.y + boss.height / 2;
+
+                            for (const angle of angles) {
+                                const rad = angle * Math.PI / 180;
+                                boss.bullets.push({
+                                    x: cx - 10,
+                                    y: cy - 10,
+                                    vx: Math.cos(rad) * speed,
+                                    vy: Math.sin(rad) * speed,
+                                    width: 20,
+                                    height: 20
+                                });
+                            }
+
+                            // 発射後すぐにクールダウンへ
+                            boss.attackState = 'cooldown';
+                            boss.attackTimer = 45; // 0.75秒クールダウン
+                            addFloatingText(boss.x + boss.width / 2, boss.y, "BURST!", "#ff4500", 20);
+                        }
+                    }
+                    break;
+
+                case 'warning':
+                    // 警告中は動かない
+                    boss.attackTimer--;
+                    if (boss.attackTimer <= 0) {
+                        boss.attackState = 'firing';
+                        boss.attackTimer = 30; // 0.5秒照射
+                        boss.hasHitPlayer = false; // ヒット判定リセット
+                        // 発射エフェクト（画面揺れなど入れたいが今回はシンプルに）
+                        createSparks(boss.attackTargetX, boss.y + boss.height, "#ff0000");
+                    }
+                    break;
+
+                case 'firing':
+                    boss.attackTimer--;
+
+                    // 当たり判定 (Rect vs Rect)
+                    // ビーム領域: x = targetX - width/2, y = 0 (or boss.y), w = width, h = SCREEN_HEIGHT
+                    const beamRect = {
+                        x: boss.attackTargetX - boss.attackWidth / 2,
+                        y: 0,
+                        width: boss.attackWidth,
+                        height: SCREEN_HEIGHT
+                    };
+
+                    if (!boss.hasHitPlayer && checkCollision(beamRect, state.player)) {
+                        state.hp -= 10;
+                        addFloatingText(state.player.x + state.player.width / 2, state.player.y, "-10 HP", "red", 30);
+                        boss.hasHitPlayer = true; // 1回の攻撃で1回だけヒット
+                        checkGameState();
+                    }
+
+                    if (boss.attackTimer <= 0) {
+                        boss.attackState = 'cooldown';
+                        boss.attackTimer = 60; // 1秒クールダウン
+                    }
+                    break;
+
+                case 'cooldown':
+                    boss.attackTimer--;
+                    if (boss.attackTimer <= 0) {
+                        boss.attackState = 'idle';
+                        boss.actionTimer = timestamp; // 次の攻撃までのタイマーリセット
+                    }
+                    break;
+            }
         }
 
         // ボス弾の更新
@@ -793,6 +1409,9 @@ function updateGame(timestamp) {
             }
         }
     }
+
+
+    // --- Virus Logic ---
 
     for (let i = state.viruses.length - 1; i >= 0; i--) {
         const v = state.viruses[i];
@@ -864,7 +1483,6 @@ function updateGame(timestamp) {
                     checkGameState();
                 }
                 state.bullets.splice(j, 1);
-                updateUI();
                 break;
             }
         }
@@ -1085,7 +1703,19 @@ function draw() {
     for (const b of state.bullets) ctx.drawImage(assets.bullet, b.x, b.y, b.width, b.height);
     for (const v of state.viruses) {
         ctx.save();
-        if (v.isStrong) ctx.filter = 'hue-rotate(150deg) saturate(2)';
+        if (v.isStrong) {
+            // α種強調：オーラ描画
+            ctx.beginPath();
+            ctx.arc(v.x + v.width / 2, v.y + v.height / 2, v.width / 2 + 5, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(255, 50, 50, ${0.3 + Math.sin(Date.now() / 100) * 0.2})`;
+            ctx.fill();
+            ctx.strokeStyle = '#ff0000';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // フィルタも維持
+            ctx.filter = 'hue-rotate(150deg) saturate(2)';
+        }
         ctx.drawImage(assets.virus, v.x, v.y, v.width, v.height);
         ctx.restore();
         const barW = v.width * 0.8;
@@ -1102,6 +1732,34 @@ function draw() {
         } else ctx.drawImage(assets.player, p.x, p.y, p.width, p.height);
         ctx.strokeStyle = 'purple'; ctx.lineWidth = 2; ctx.strokeRect(p.x - 5, p.y - 5, p.width + 10, p.height + 10);
     } else ctx.drawImage(assets.player, p.x, p.y, p.width, p.height);
+
+    // Boss 2 Special Attack Drawing (Draw OVER player)
+    if (state.isMapMode && state.currentStageId === 'map2-boss' && state.boss) {
+        const boss = state.boss;
+        if (boss.attackState === 'warning') {
+            // 警告ライン (赤点滅)
+            const alpha = (Math.floor(Date.now() / 50) % 2 === 0) ? 0.3 : 0.1;
+            ctx.fillStyle = `rgba(255, 0, 0, ${alpha})`;
+            const bx = boss.attackTargetX - boss.attackWidth / 2;
+            ctx.fillRect(bx, 0, boss.attackWidth, SCREEN_HEIGHT);
+
+            // ガイド線
+            ctx.strokeStyle = `rgba(255, 0, 0, 0.8)`;
+            ctx.lineWidth = 2;
+            ctx.strokeRect(bx, 0, boss.attackWidth, SCREEN_HEIGHT);
+
+        } else if (boss.attackState === 'firing') {
+            // ビーム (明滅)
+            const intensity = (Math.floor(Date.now() / 20) % 2 === 0) ? 0.9 : 0.6;
+            ctx.fillStyle = `rgba(255, 50, 50, ${intensity})`;
+            const bx = boss.attackTargetX - boss.attackWidth / 2;
+            ctx.fillRect(bx, 0, boss.attackWidth, SCREEN_HEIGHT);
+
+            // コア
+            ctx.fillStyle = `rgba(255, 255, 255, 0.8)`;
+            ctx.fillRect(bx + boss.attackWidth / 4, 0, boss.attackWidth / 2, SCREEN_HEIGHT);
+        }
+    }
 
     for (const p of state.particles) { ctx.fillStyle = p.color; ctx.globalAlpha = p.life / 30; ctx.fillRect(p.x, p.y, 3, 3); }
     ctx.globalAlpha = 1;
@@ -1162,6 +1820,7 @@ function draw() {
             // 3倍サイズで描画 (assets.virusを使用)
             ctx.filter = 'hue-rotate(280deg) saturate(3)'; // 紫色のボス
             ctx.drawImage(assets.virus, boss.x, boss.y, boss.width, boss.height);
+            ctx.filter = 'none'; // フィルタ解除 (念のため)
             ctx.restore();
 
             // ボス弾描画
@@ -1220,6 +1879,7 @@ function saveGame() {
         lastClearedStage: state.lastClearedStage,
         clearedStages: state.clearedStages,
         stageClearCounts: state.stageClearCounts,
+        skills: state.skills,
         purifyTargetPoints: state.purifyTargetPoints
     };
     localStorage.setItem("virusShooterSave", JSON.stringify(saveData));

@@ -327,6 +327,45 @@
                     </section>
                 </div>
             </div>
+
+            <!-- スキルツリータブ -->
+            <div id="skill-tree-tab" class="tab-content">
+                <h2>スキル開花</h2>
+                <div class="skill-tree-container" id="skill-tree-viewport">
+                    <div id="skill-tree-content">
+                        <!-- 中央起点 -->
+                        <div class="skill-node start-node acquired" data-skill="start">
+                            <div class="node-icon">🌱</div>
+                            <div class="node-label">起点</div>
+                        </div>
+
+                        <!-- 上: 体力 -->
+                        <div class="skill-node hp-bloom" data-skill="hpBloom">
+                            <div class="node-icon">💚</div>
+                            <div class="node-label">体力開花</div>
+                            <div class="node-cost">欠片: 50</div>
+                        </div>
+
+                        <!-- 左: 攻撃 -->
+                        <div class="skill-node atk-bloom" data-skill="attackBloom">
+                            <div class="node-icon">⚔️</div>
+                            <div class="node-label">攻撃開花</div>
+                            <div class="node-cost">欠片: 50</div>
+                        </div>
+
+                        <!-- 右: 特殊 -->
+                        <div class="skill-node sp-bloom" data-skill="specialBloom">
+                            <div class="node-icon">✨</div>
+                            <div class="node-label">特殊開花</div>
+                            <div class="node-cost">欠片: 50</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="skill-info">
+                    <p>スキルを開花させて新たな力を手に入れよう</p>
+                    <p>現在の欠片: <span id="skill-fragment-display">0</span></p>
+                </div>
+            </div>
         </div>
 
         <!-- タブナビゲーション -->
@@ -359,9 +398,18 @@
                 <span class="tab-icon">🏥</span>
                 <span class="tab-text">治療</span>
             </button>
+            <button class="tab-btn" data-tab="skill-tree-tab">
+                <span class="tab-icon">🌱</span>
+                <span class="tab-text">開花</span>
+            </button>
         </nav>
     </div>
-    <script src="game.js?v=1.4"></script>
+    <div id="skill-tooltip" class="tooltip hidden">
+        <h3 id="tooltip-title">Skill Name</h3>
+        <p id="tooltip-desc">Description goes here.</p>
+        <p id="tooltip-cost">Cost: 50</p>
+    </div>
+    <script src="game.js?v=1.5"></script>
 </body>
 
 </html>

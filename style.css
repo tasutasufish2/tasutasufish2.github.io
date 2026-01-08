@@ -1168,3 +1168,236 @@ body {
     color: #ffd700;
     font-weight: bold;
 }
+
+/* --- Skill Tree (Refined Design) --- */
+.skill-tree-container {
+    position: relative;
+    width: 100%;
+    max-width: 400px;
+    height: 400px;
+    margin: 20px auto;
+    background: radial-gradient(circle at center, #1a1a2e 0%, #0f0f1a 100%);
+    border-radius: 20px;
+    border: 2px solid #444;
+    overflow: hidden;
+    /* Hide overflow for panning */
+    box-shadow: inset 0 0 30px #000;
+    cursor: grab;
+    /* Indicate draggable */
+    touch-action: none;
+    /* Prevent default touch scrolling */
+}
+
+.skill-tree-container:active {
+    cursor: grabbing;
+}
+
+#skill-tree-content {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    transform-origin: center center;
+    transition: transform 0.05s linear;
+    /* Smooth drag? Or none for direct. Let's try minimal */
+    /* Lines are drawn inside here via pseudo or other divs if needed, 
+       but we removed the main grid lines. If specific lines between nodes are needed, 
+       they should be added here. For now, assuming only nodes. */
+}
+
+/* Background Stars (Pseudo-element) */
+.skill-tree-container::before {
+    content: '';
+    position: absolute;
+    width: 200%;
+    height: 200%;
+    top: -50%;
+    left: -50%;
+    background-image:
+        radial-gradient(white 1px, transparent 1px),
+        radial-gradient(rgba(255, 255, 255, 0.5) 1px, transparent 1px);
+    background-size: 50px 50px, 30px 30px;
+    background-position: 0 0, 15px 15px;
+    opacity: 0.3;
+    pointer-events: none;
+}
+
+/* Skill Node Positioning - Radial Layout */
+.start-node {
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+/* HP Bloom - Top (0 degrees) */
+.hp-bloom {
+    top: 15%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+/* Attack Bloom - Left (270 degrees) */
+.atk-bloom {
+    top: 50%;
+    left: 15%;
+    transform: translate(-50%, -50%);
+}
+
+/* Special Bloom - Right (90 degrees) */
+.sp-bloom {
+    top: 50%;
+    left: 85%;
+    transform: translate(-50%, -50%);
+}
+
+/* Connecting Lines - Individual lines from center to each node */
+.hp-bloom::before,
+.atk-bloom::before,
+.sp-bloom::before {
+    content: '';
+    position: absolute;
+    background: linear-gradient(to bottom, #8B4513, transparent);
+    width: 3px;
+    pointer-events: none;
+    z-index: -1;
+}
+
+/* Line from center to HP (upward) */
+.hp-bloom::before {
+    height: 140px;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: linear-gradient(to top, #8B4513, transparent);
+}
+
+/* Line from center to Attack (leftward) */
+.atk-bloom::before {
+    width: 140px;
+    height: 3px;
+    right: 100%;
+    top: 50%;
+    transform: translateY(-50%);
+    background: linear-gradient(to left, #8B4513, transparent);
+}
+
+/* Line from center to Special (rightward) */
+.sp-bloom::before {
+    width: 140px;
+    height: 3px;
+    left: 100%;
+    top: 50%;
+    transform: translateY(-50%);
+    background: linear-gradient(to right, #8B4513, transparent);
+}
+
+
+.skill-node {
+    position: absolute;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: #222;
+    border: 3px solid #555;
+    /* Default inactive border */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+    z-index: 2;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.8);
+}
+
+.node-icon {
+    font-size: 20px;
+    pointer-events: none;
+}
+
+/* Hide old labels/costs inside node, using tooltip instead */
+.node-label,
+.node-cost {
+    display: none;
+}
+
+/* Node States */
+.skill-node.locked {
+    border-color: #444;
+    opacity: 0.7;
+    filter: grayscale(1);
+}
+
+.skill-node.available {
+    border-color: #ffd700;
+    /* Gold for available */
+    box-shadow: 0 0 15px rgba(255, 215, 0, 0.4);
+    animation: pulseNode 2s infinite;
+}
+
+.skill-node.acquired {
+    background: #333;
+    border-color: #9b59b6;
+    /* Purple for acquired/mastered */
+    box-shadow: 0 0 15px rgba(155, 89, 182, 0.6);
+}
+
+.skill-node.acquired .node-icon {
+    filter: drop-shadow(0 0 5px currentColor);
+}
+
+/* Special Start Node Style */
+.start-node.acquired {
+    border-color: #ffd700;
+    /* Gold */
+    box-shadow: 0 0 20px rgba(255, 215, 0, 0.6);
+    width: 60px;
+    height: 60px;
+    /* Slightly larger */
+}
+
+
+/* --- Tooltip --- */
+.tooltip {
+    position: fixed;
+    background: rgba(20, 20, 30, 0.95);
+    border: 2px solid #ffd700;
+    color: #fff;
+    padding: 15px;
+    border-radius: 8px;
+    pointer-events: none;
+    z-index: 3000;
+    width: 200px;
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.8);
+    transform: translate(-50%, -120%);
+    /* Center above cursor */
+    transition: opacity 0.2s;
+}
+
+.tooltip.hidden {
+    opacity: 0;
+    pointer-events: none;
+    display: block;
+    /* maintain layout for transition */
+}
+
+.tooltip h3 {
+    margin: 0 0 5px 0;
+    font-size: 16px;
+    color: #ffd700;
+    border-bottom: 1px solid #444;
+    padding-bottom: 5px;
+}
+
+.tooltip p {
+    margin: 5px 0;
+    font-size: 13px;
+    color: #ccc;
+    line-height: 1.4;
+}
+
+#tooltip-cost {
+    font-weight: bold;
+    color: #e74c3c;
+    /* Red for cost */
+}
