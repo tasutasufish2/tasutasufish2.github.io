@@ -132,6 +132,7 @@ body {
     /* ボタン並び順変更に伴い間隔を微調整 */
     padding: 10px 0;
     width: 100%;
+    touch-action: none;
 }
 
 .move-btn,
